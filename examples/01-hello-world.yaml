@@ -1,0 +1,11 @@
+apiVersion: score.dev/v1b1
+
+metadata:
+  name: hello-world
+
+containers:
+  hello:
+    image: busybox
+    command: ["/bin/sh", "-c", "while true; do echo Hello ${NAME}!; sleep 5; done"]
+    variables:
+      NAME: World

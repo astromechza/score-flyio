@@ -1,0 +1,6 @@
+package: flymachinesclient
+generate:
+  models: true
+  client: true
+  echo-server: false
+output: client.gen.go
