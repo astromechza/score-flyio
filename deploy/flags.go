@@ -1,11 +1,15 @@
 package deploy
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -20,6 +24,39 @@ type Args struct {
 	App              string
 	DryRun           bool
 	ScoreFileContent []byte
+	Extensions       []Extension
+}
+
+type Extension struct {
+	Path   string      `json:"path"`
+	Set    interface{} `json:"set"`
+	Delete bool        `json:"delete"`
+}
+
+type extensionsFlag struct {
+	Extensions []Extension
+}
+
+func (of *extensionsFlag) String() string {
+	return fmt.Sprintf("%v", of.Extensions)
+}
+
+func (of *extensionsFlag) Set(value string) error {
+	parts := strings.Split(value, "=")
+	if len(parts) < 2 {
+		return fmt.Errorf("does not contain '='")
+	}
+	if parts[1] == "" {
+		of.Extensions = append(of.Extensions, Extension{Path: parts[0], Delete: true})
+	} else {
+		var temp interface{}
+		if err := json.Unmarshal([]byte(parts[1]), &temp); err != nil {
+			return fmt.Errorf("could not json decode extension: %w", err)
+		} else {
+			of.Extensions = append(of.Extensions, Extension{Path: parts[0], Set: temp})
+		}
+	}
+	return nil
 }
 
 func ParseFlagArgs(parent *flag.FlagSet) (Args, error) {
@@ -30,16 +67,34 @@ func ParseFlagArgs(parent *flag.FlagSet) (Args, error) {
 		fs.PrintDefaults()
 		_, _ = fmt.Fprintf(fs.Output(), FlagHelpSuffix)
 	}
-	receiver := new(Args)
+	receiver := &Args{Extensions: make([]Extension, 0)}
 	fs.BoolVar(&receiver.DryRun, "dry-run", false, "Validated inputs and remote state but don't change anything")
-	fs.StringVar(&receiver.Org, "org", "", "The target Fly.io organization")
+	fs.StringVar(&receiver.Org, "org", "personal", "The target Fly.io organization")
 	fs.StringVar(&receiver.App, "app", "", "The target Fly.io app name otherwise the name of the Score workload will be used")
+
+	extensionsReceiver := extensionsFlag{Extensions: make([]Extension, 0)}
+	fs.Var(&extensionsReceiver, "extension", "An extension in the outgoing Fly machine config to set, as json separated by a =")
+
+	var extensionsFile string
+	fs.StringVar(&extensionsFile, "extensions", "", "A file containing a list of extensions {path: string, set: any, delete: bool}")
+
 	if err := fs.Parse(parent.Args()[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return *receiver, flag.ErrHelp
 		}
 		return *receiver, err
 	}
+
+	if extensionsFile != "" {
+		if raw, err := os.ReadFile(extensionsFile); err != nil {
+			return *receiver, fmt.Errorf("failed to read extensions file: %w", err)
+		} else if err := yaml.Unmarshal(raw, &receiver.Extensions); err != nil {
+			return *receiver, fmt.Errorf("failed to decode extensions file: %w", err)
+		}
+	}
+
+	receiver.Extensions = append(receiver.Extensions, extensionsReceiver.Extensions...)
+
 	if fs.NArg() != 1 {
 		_, _ = fmt.Fprintf(fs.Output(), "Expected a file as the 1st and only positional argument.\n")
 		fs.Usage()

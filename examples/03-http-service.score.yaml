@@ -1,0 +1,23 @@
+apiVersion: score.dev/v1b1
+
+metadata:
+  name: hello-world
+
+containers:
+  web:
+    image: nginx
+    livenessProbe:
+      httpGet:
+        path: "/"
+        port: 80
+    files:
+    - target: /usr/share/nginx/html/README.html
+      content: |
+        <html><p>Hello World</p></html>
+
+service:
+  ports:
+    www:
+      protocol: tcp
+      port: 80
+      targetPort: 80
