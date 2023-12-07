@@ -9,7 +9,13 @@ A Score transformer for Fly.io. Convert your Score application files into Fly.io
 The following command will validate and transform the Score file into a Fly.io Machine configuration and deploy or update it.
 
 ```
-score-flyio launch score.yaml
+$ go install github.com/astromechza/score-flyio@latest
+go: downloading github.com/astromechza/score-flyio v0.0.0-20231206214427-f5eb613bc02b
+
+$ which score-flyio
+/Users/bmeier/.gvm/pkgsets/go1.21.0/global/bin/score-flyio
+
+$ score-flyio deploy --app score-flyio-1234 examples/01-hello-world.yaml
 ```
 
 Any container volumes will be converted into per-machine Fly.io volumes. Unless they are defined in the resources section as volumes when they will be provisioned as shared volumes.

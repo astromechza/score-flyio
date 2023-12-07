@@ -32,7 +32,7 @@ func ParseFlagArgs(parent *flag.FlagSet) (Args, error) {
 	}
 	receiver := new(Args)
 	fs.BoolVar(&receiver.DryRun, "dry-run", false, "Validated inputs and remote state but don't change anything")
-	fs.StringVar(&receiver.Org, "org", "", "The target Fly.io organization")
+	fs.StringVar(&receiver.Org, "org", "personal", "The target Fly.io organization")
 	fs.StringVar(&receiver.App, "app", "", "The target Fly.io app name otherwise the name of the Score workload will be used")
 	if err := fs.Parse(parent.Args()[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
