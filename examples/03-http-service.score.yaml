@@ -10,10 +10,10 @@ containers:
       httpGet:
         path: "/"
         port: 80
-    readinessProbe:
-      httpGet:
-        path: "/"
-        port: 80
+    files:
+    - target: /usr/share/nginx/html/README.html
+      content: |
+        <html><p>Hello World</p></html>
 
 service:
   ports:

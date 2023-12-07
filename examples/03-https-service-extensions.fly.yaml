@@ -1,0 +1,4 @@
+- path: services.0.ports.0.port
+  set: 443
+- path: services.0.ports.0.handlers
+  set: ["tls", "http"]

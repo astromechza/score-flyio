@@ -2,13 +2,18 @@ package deploy
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
+
+	"github.com/tidwall/sjson"
+	"gopkg.in/yaml.v3"
 
 	"github.com/astromechza/score-flyio/flymachinesclient"
 	"github.com/astromechza/score-flyio/score"
@@ -27,9 +32,24 @@ func Run(args Args) error {
 	if err != nil {
 		return fmt.Errorf("failed to convert score to Fly machine: %w", err)
 	}
+
+	// in order to apply sjson modifications, we need to coerce through json
+	rawMachineJson, _ := json.Marshal(asMachine)
+	machineJson := string(rawMachineJson)
+
+	if len(args.Extensions) > 0 {
+		slog.Info(fmt.Sprintf("Applying %d extensions..", len(args.Extensions)))
+		for _, extension := range args.Extensions {
+			machineJson, err = sjson.Set(machineJson, extension.Path, extension.Set)
+		}
+		asMachine = flymachinesclient.ApiMachineConfig{}
+		if err := json.Unmarshal([]byte(machineJson), &asMachine); err != nil {
+			return fmt.Errorf("failed to convert machine json with extensions back to machine: %w", err)
+		}
+	}
+
 	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
-		asYaml, _ := json.Marshal(asMachine)
-		slog.Debug(string(asYaml))
+		slog.Debug(machineJson)
 	}
 
 	client, err := flymachinesclient.BuildScoreClient()
@@ -84,7 +104,12 @@ func Run(args Args) error {
 		slog.Info(fmt.Sprintf("Plan: create 1 new machine in the app"))
 	}
 	if args.DryRun {
-		slog.Info("Stopping here because --dry-run was provided")
+		slog.Info("Stopping here and dumping yaml because --dry-run was provided")
+		var temp interface{}
+		if err := json.Unmarshal([]byte(machineJson), &temp); err != nil {
+			return fmt.Errorf("failed to unmarshal: %w", err)
+		}
+		_ = yaml.NewEncoder(os.Stdout).Encode(&temp)
 		return nil
 	}
 
@@ -161,7 +186,9 @@ func convertScoreIntoMachine(spec *score.WorkloadSpec) (flymachinesclient.ApiMac
 		var env map[string]string = container.Variables
 		process.Env = ref(env)
 	}
-	output.Processes = &[]flymachinesclient.ApiMachineProcess{process}
+	if process.Cmd != nil || process.Entrypoint != nil || process.Env != nil {
+		output.Processes = &[]flymachinesclient.ApiMachineProcess{process}
+	}
 	if container.Resources != nil {
 		cpuReq := ""
 		if container.Resources.Limits != nil && container.Resources.Limits.Cpu != nil {
@@ -227,6 +254,35 @@ func convertScoreIntoMachine(spec *score.WorkloadSpec) (flymachinesclient.ApiMac
 		output.Services = &flyServices
 	}
 
+	if len(container.Files) > 0 {
+		outputFiles := make([]flymachinesclient.ApiFile, 0)
+		for i, containerFile := range container.Files {
+			if containerFile.Mode != nil {
+				return output, fmt.Errorf("containers: files[%d]: mode is not supported", i)
+			} else if containerFile.NoExpand != nil && *containerFile.NoExpand == false {
+				return output, fmt.Errorf("containers: files[%d]: expand is not supported", i)
+			}
+			var rawContent string
+			if v, ok := containerFile.Content.(string); ok && v != "" {
+				rawContent = v
+			} else if containerFile.Source != nil {
+				if rawData, err := os.ReadFile(*containerFile.Source); err != nil {
+					return output, fmt.Errorf("containers: files[%d]: failed to read source: %w", i, err)
+				} else {
+					rawContent = string(rawData)
+				}
+			} else {
+				return output, fmt.Errorf("containers: files[%d]: is missing source or content", i)
+			}
+			rawContent = base64.StdEncoding.EncodeToString([]byte(rawContent))
+			outputFiles = append(outputFiles, flymachinesclient.ApiFile{
+				GuestPath: ref(containerFile.Target),
+				RawValue:  &rawContent,
+			})
+		}
+		output.Files = &outputFiles
+	}
+
 	return output, nil
 }
 
@@ -237,8 +293,8 @@ func convertProbeToCheck(hg *score.HttpProbe) flymachinesclient.ApiMachineCheck 
 		Method:      ref("GET"),
 		Path:        ref(hg.Path),
 		GracePeriod: ref("10s"),
-		Interval:    ref("10s"),
-		Timeout:     ref("10s"),
+		Interval:    ref("15s"),
+		Timeout:     ref("3s"),
 	}
 	if hg.Scheme != nil {
 		probe.Protocol = ref(string(*hg.Scheme))
