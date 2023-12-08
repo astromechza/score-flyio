@@ -395,6 +395,30 @@ func convertScoreIntoMachine(appName string, spec *score.WorkloadSpec) (flymachi
 		output.Files = &outputFiles
 	}
 
+	if len(container.Volumes) > 0 {
+		if len(container.Volumes) > 1 {
+			return output, fmt.Errorf("containers.%s.volumes: Fly.io only supports 1 volume per machine", containerName)
+		}
+		mounts := make([]flymachinesclient.ApiMachineMount, 0)
+		for i, volume := range container.Volumes {
+			if volume.ReadOnly != nil && *volume.ReadOnly == true {
+				return output, fmt.Errorf("containers.%s.volumes[%d]: read only not supported", containerName, i)
+			}
+			if volume.Path != nil && *volume.Path != "/" {
+				return output, fmt.Errorf("containers.%s.volumes[%d]: subpath not supported", containerName, i)
+			}
+			volName, err := templating.Substitute(volume.Source)
+			if err != nil {
+				return output, fmt.Errorf("containers.%s.volumes[%d].source: failed to substitue: %w", containerName, i, err)
+			}
+			mounts = append(mounts, flymachinesclient.ApiMachineMount{
+				Name: ref(volName),
+				Path: ref(volume.Target),
+			})
+		}
+		output.Mounts = &mounts
+	}
+
 	return output, nil
 }
 
