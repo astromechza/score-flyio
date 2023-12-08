@@ -11,4 +11,4 @@ containers:
     resources:
       requests:
         cpu: "2"
-        memory: "536870912"
+        memory: "512M"
