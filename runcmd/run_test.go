@@ -140,12 +140,50 @@ func Test_convertSpecTests(t *testing.T) {
 				Containers: map[string]score.Container{"c": {Variables: map[string]string{"A": "${resources.env.SCOREFLYIORANDOMKEY}"}}},
 				Resources:  map[string]score.Resource{"env": {Type: "environment"}},
 			},
-			error: "containers.c.variables.A: failed to interpolate: env var SCOREFLYIORANDOMKEY not set",
+			error: "containers.c.variables.A: failed to interpolate: property SCOREFLYIORANDOMKEY not set on resource type",
+		},
+		{
+			name: "unsupported environment class",
+			input: score.WorkloadSpec{
+				Containers: map[string]score.Container{"c": {Variables: map[string]string{"A": "${resources.env.SCOREFLYIORANDOMKEY}"}}},
+				Resources:  map[string]score.Resource{"env": {Type: "environment", Class: ref("unknown")}},
+			},
+			error: "resources: 'env': environment.'unknown' class not supported",
+		},
+		{
+			name: "default dns resource",
+			input: score.WorkloadSpec{
+				Containers: map[string]score.Container{"c": {Variables: map[string]string{"A": "${resources.d.host}"}}},
+				Resources:  map[string]score.Resource{"d": {Type: "dns"}},
+			},
+			output: flymachinesclient.ApiMachineConfig{
+				Image:     ref(""),
+				Processes: ref([]flymachinesclient.ApiMachineProcess{{Env: ref(map[string]string{"A": "my-app.internal"})}}),
+			},
+		},
+		{
+			name: "external dns resource",
+			input: score.WorkloadSpec{
+				Containers: map[string]score.Container{"c": {Variables: map[string]string{"A": "${resources.d.host}"}}},
+				Resources:  map[string]score.Resource{"d": {Type: "dns", Class: ref("external")}},
+			},
+			output: flymachinesclient.ApiMachineConfig{
+				Image:     ref(""),
+				Processes: ref([]flymachinesclient.ApiMachineProcess{{Env: ref(map[string]string{"A": "my-app.fly.dev"})}}),
+			},
+		},
+		{
+			name: "unsupported dns class",
+			input: score.WorkloadSpec{
+				Containers: map[string]score.Container{"c": {Variables: map[string]string{"A": "${resources.d.host}"}}},
+				Resources:  map[string]score.Resource{"d": {Type: "dns", Class: ref("unknown")}},
+			},
+			error: "resources: 'd': dns.'unknown' class not supported",
 		},
 	} {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			o, err := convertScoreIntoMachine(&tc.input)
+			o, err := convertScoreIntoMachine("my-app", &tc.input)
 			if tc.error != "" {
 				if err == nil {
 					t.Errorf("no error, expected '%s'", tc.error)

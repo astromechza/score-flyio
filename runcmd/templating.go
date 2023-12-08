@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 
@@ -17,8 +16,8 @@ var (
 
 // templatesContext ia an utility type that provides a context for '${...}' templates substitution
 type templatesContext struct {
-	meta      score.WorkloadSpecMetadata
-	resources score.WorkloadSpecResources
+	meta               score.WorkloadSpecMetadata
+	resourceProperties map[string]map[string]interface{}
 }
 
 // Substitute replaces all matching '${...}' templates in a source string
@@ -67,20 +66,15 @@ func (ctx *templatesContext) mapVar(ref string) (string, error) {
 		}
 	case "resources":
 		if len(segments) == 3 {
-			resource, ok := ctx.resources[segments[1]]
+			resource, ok := ctx.resourceProperties[segments[1]]
 			if !ok {
 				return "", fmt.Errorf("undefined resource '%s'", segments[1])
 			}
-			switch resource.Type {
-			case "environment":
-				if v := os.Getenv(segments[2]); v != "" {
-					return v, nil
-				} else {
-					return "", fmt.Errorf("env var %s not set", segments[2])
-				}
-			default:
-				return "", fmt.Errorf("no properties resolvable from resource of type '%s'", resource.Type)
+			property, ok := resource[segments[2]]
+			if !ok {
+				return "", fmt.Errorf("property %s not set on resource type", segments[2])
 			}
+			return fmt.Sprint(property), nil
 		}
 	}
 	return "", fmt.Errorf("unsupported expression reference '%s'", ref)

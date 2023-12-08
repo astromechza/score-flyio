@@ -2,3 +2,5 @@
   set: 443
 - path: services.0.ports.0.handlers
   set: ["tls", "http"]
+- path: processes.0.env.EXTERNAL_SCHEMA
+  set: https://
