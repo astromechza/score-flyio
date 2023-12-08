@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -153,6 +154,63 @@ func ref[k any](input k) *k {
 	return &input
 }
 
+func convertCpu(input string) (int, error) {
+	m := regexp.MustCompile(`^(\d+(?:[e.]\d+)?)(m?)$`).FindStringSubmatch(input)
+	if m == nil {
+		return 0, fmt.Errorf("does not match regex pattern")
+	}
+	value, err := strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse '%s' as float", m[1])
+	} else if math.IsNaN(value) || value <= 0 {
+		return 0, fmt.Errorf("value was not positive")
+	}
+	if m[2] == "m" {
+		value = value / 1000
+	}
+	value = math.Trunc(value*1000) / 1000
+	if value != math.Round(value) {
+		return 0, fmt.Errorf("Fly.io can only support integer numbers of cpus (%v != %v)", value, math.Round(value))
+	}
+	return int(value), nil
+}
+
+func convertMemoryToMegabytes(input string) (int, error) {
+	m := regexp.MustCompile(`^(\d+(?:[e.]\d+)?)([A-Za-z]*)$`).FindStringSubmatch(input)
+	if m == nil {
+		return 0, fmt.Errorf("does not match regex pattern")
+	}
+	value, err := strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse '%s' as float", m[1])
+	} else if math.IsNaN(value) || value <= 0 {
+		return 0, fmt.Errorf("value was not positive")
+	}
+	switch m[2] {
+	case "":
+	case "k":
+		value = value * 1_000
+	case "M":
+		value = value * 1_000_000
+	case "G":
+		value = value * 1_000_000_000
+	case "Ki":
+		value = value * (1 << 10)
+	case "Mi":
+		value = value * (1 << 20)
+	case "Gi":
+		value = value * (1 << 30)
+	default:
+		return 0, fmt.Errorf("unsupported unit")
+	}
+	// We assume Fly is interested in Megabytes here, not Mebibytes
+	value = math.Round(value / 1_000_000)
+	if multiple := math.Round(value / 256); multiple == 0 || value != (256*multiple) {
+		return 0, fmt.Errorf("Fly.io can only support multiples of 256 Megabytes of memory (got %vM)", value)
+	}
+	return int(value), nil
+}
+
 func convertScoreIntoMachine(spec *score.WorkloadSpec) (flymachinesclient.ApiMachineConfig, error) {
 	output := flymachinesclient.ApiMachineConfig{}
 
@@ -195,21 +253,17 @@ func convertScoreIntoMachine(spec *score.WorkloadSpec) (flymachinesclient.ApiMac
 			output.Guest = &flymachinesclient.ApiMachineGuest{CpuKind: ref("shared")}
 		}
 		if cpuReq != "" {
-			if v, err := strconv.ParseFloat(cpuReq, 32); err != nil {
-				return output, fmt.Errorf("failed to parse container cpu resource '%s': %w", cpuReq, err)
+			if v, err := convertCpu(cpuReq); err != nil {
+				return output, fmt.Errorf("invalid container cpu resource '%s': %w", cpuReq, err)
 			} else {
-				output.Guest.Cpus = ref(int(math.Ceil(v)))
+				output.Guest.Cpus = ref(v)
 			}
 		}
 		if memoryBytes != "" {
-			if v, err := strconv.ParseInt(memoryBytes, 10, 64); err != nil {
-				return output, fmt.Errorf("failed to parse container memory resource '%s': %w", memoryBytes, err)
+			if v, err := convertMemoryToMegabytes(memoryBytes); err != nil {
+				return output, fmt.Errorf("invalid container memory resource '%s': %w", memoryBytes, err)
 			} else {
-				if d := float64(v) / float64(256*1024*1024); d < 1 || math.Round(d) != d {
-					return output, fmt.Errorf("container memory resource must be a multiple of 256 MB but was '%s': %w", memoryBytes, err)
-				} else {
-					output.Guest.MemoryMb = ref(int(d * 256))
-				}
+				output.Guest.MemoryMb = ref(v)
 			}
 		}
 	}
