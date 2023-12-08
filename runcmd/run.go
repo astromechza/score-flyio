@@ -214,6 +214,15 @@ func convertMemoryToMegabytes(input string) (int, error) {
 func convertScoreIntoMachine(spec *score.WorkloadSpec) (flymachinesclient.ApiMachineConfig, error) {
 	output := flymachinesclient.ApiMachineConfig{}
 
+	for resourceName, resource := range spec.Resources {
+		switch resource.Type {
+		case "":
+			return output, fmt.Errorf("resources: '%s': missing resource type", resourceName)
+		default:
+			return output, fmt.Errorf("resources: '%s': unsupported resource type '%s'", resourceName, resource.Type)
+		}
+	}
+
 	if len(spec.Containers) != 1 {
 		return output, fmt.Errorf("score spec contains more than 1 container")
 	}
