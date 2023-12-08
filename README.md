@@ -26,6 +26,22 @@ $ score-flyio run --app score-flyio-1234 examples/01-hello-world.score.yaml
 - Live-ness and readiness probes will be converted into checks.
 - Files will be converted into Fly.io files.
 
+## Supported Score Features
+
+### Supported Resource Types
+
+The supported resource types are:
+
+- `environment` - For accessing local environment variables. Properties can be used for accessing environment variables like `${resources.env.SOME_KEY}`.
+
+### Metadata Interpolation
+
+Environment Variables and File contents may interpolate values from the metadata section via `${metadata.<key>}`.
+
+### Resource Interpolation
+
+Properties from declared resources can be accessed via `${resources.<name>.<property>}`.
+
 ## Extensions
 
 Once the Score spec has been converted into a Machine Config payload (see https://fly.io/docs/machines/working-with-machines/#the-machine-config-object-properties and https://docs.machines.dev/swagger/index.html#/Machines/Machines_create),

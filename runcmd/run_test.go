@@ -3,6 +3,7 @@ package runcmd
 import (
 	"encoding/base64"
 	"encoding/json"
+	"os"
 	"reflect"
 	"strconv"
 	"testing"
@@ -81,6 +82,7 @@ func Test_convertMemory(t *testing.T) {
 }
 
 func Test_convertSpecTests(t *testing.T) {
+	_ = os.Setenv("SOME_KEY", "SOME_VALUE")
 	for _, tc := range []struct {
 		name   string
 		input  score.WorkloadSpec
@@ -120,6 +122,25 @@ func Test_convertSpecTests(t *testing.T) {
 			name:  "bad files substitution",
 			input: score.WorkloadSpec{Containers: map[string]score.Container{"c": {Files: []score.ContainerFilesElem{{Target: "/", Content: "${thing}"}}}}},
 			error: "containers.c.files[0]: failed to substitute content: unsupported expression reference 'thing'",
+		},
+		{
+			name: "environment resource",
+			input: score.WorkloadSpec{
+				Containers: map[string]score.Container{"c": {Variables: map[string]string{"A": "${resources.env.SOME_KEY}"}}},
+				Resources:  map[string]score.Resource{"env": {Type: "environment"}},
+			},
+			output: flymachinesclient.ApiMachineConfig{
+				Image:     ref(""),
+				Processes: ref([]flymachinesclient.ApiMachineProcess{{Env: ref(map[string]string{"A": "SOME_VALUE"})}}),
+			},
+		},
+		{
+			name: "environment resource with missing variable",
+			input: score.WorkloadSpec{
+				Containers: map[string]score.Container{"c": {Variables: map[string]string{"A": "${resources.env.SCOREFLYIORANDOMKEY}"}}},
+				Resources:  map[string]score.Resource{"env": {Type: "environment"}},
+			},
+			error: "containers.c.variables.A: failed to interpolate: env var SCOREFLYIORANDOMKEY not set",
 		},
 	} {
 		tc := tc
