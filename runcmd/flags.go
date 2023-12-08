@@ -1,4 +1,4 @@
-package deploy
+package runcmd
 
 import (
 	"encoding/json"
@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	FlagSubcommand = "deploy"
+	FlagSubcommand = "run"
 	FlagHelpPrefix = `
 `
 	FlagHelpSuffix = ``
