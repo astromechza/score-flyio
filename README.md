@@ -2,7 +2,11 @@
 
 | ⚠️ This project is still being developed! Track the development here.
 
-A Score transformer for Fly.io. Convert your Score application files into Fly.io machines and apps!
+A [Score](https://docs.score.dev/docs/) transformer for [Fly.io](https://fly.io/). Convert your Score application files into Fly.io machines!
+
+Score is a platform-agnostic Workload specification to improve developer productivity and experience. Score allows you to specify the workload once and deploy the same specification to many platforms.
+
+This CLI will transform a Score specification into a Fly.io Machine and deploy it into an existing Fly.io app or create a new machine there if none exist. You should still use the `flyctl` tool to manage machine lifecycle and cloning, but `score-flyio` will ensure that the workload specifation is applied.
 
 ## Usage
 
@@ -15,20 +19,12 @@ go: downloading github.com/astromechza/score-flyio v0.0.0-20231206214427-f5eb613
 $ which score-flyio
 /Users/bmeier/.gvm/pkgsets/go1.21.0/global/bin/score-flyio
 
-$ score-flyio run --app score-flyio-1234 examples/01-hello-world.yaml
+$ score-flyio run --app score-flyio-1234 examples/01-hello-world.score.yaml
 ```
 
-Any services will be converted into Fly.io Machine services.
-
-Live-ness and readiness probes will be converted into checks as appropriate.
-
-Files will be converted into Fly.io files.
-
-(TODO) Any container volumes will be converted into per-machine Fly.io volumes. Unless they are defined in the resources section as volumes when they will be provisioned as shared volumes.
-
-(TODO) A DNS resource will be converted into a Fly.io shared ipv4 address.
-
-(TODO) If a Postgres resource is added, and it has an annotation pointing to an existing Fly.io Postgres app within the same org, we will "attach" it to the Fly application via the DATABASE_URL environment variable.
+- Any Score services will be converted into Fly.io Machine services and exposed over the private network.
+- Live-ness and readiness probes will be converted into checks.
+- Files will be converted into Fly.io files.
 
 ## Extensions
 
@@ -51,3 +47,9 @@ Extension file content:
 Extension command line to set a value: `--extension 'process.0.env={"key":"value"}'`.
 
 Extension command line to delete a value: `--extension 'process.0.env=`.
+
+## TODO:
+
+- Any container volumes will be converted into per-machine Fly.io volumes. Unless they are defined in the resources section as volumes when they will be provisioned as shared volumes.
+- A DNS resource will be converted into a Fly.io shared ipv4 address.
+- If a Postgres resource is added, and it has an annotation pointing to an existing Fly.io Postgres app within the same org, we will "attach" it to the Fly application via the DATABASE_URL environment variable.

@@ -59,6 +59,23 @@ func Run(args Args) error {
 	if args.App == "" {
 		args.App = scoreSpec.Metadata["name"].(string)
 	}
+	if args.Org == "" {
+		return fmt.Errorf("no Fly.io org specified, please set --org")
+	}
+	if args.App == "" {
+		return fmt.Errorf("no Fly.io app specified, please set --app or set a metadata.name in the Score specification")
+	}
+	slog.Info(fmt.Sprintf("This deployment applies to App '%s' in Organization '%s'..", args.Org, args.App))
+
+	if args.DryRun {
+		slog.Info("Stopping here and dumping yaml because --dry-run was provided")
+		var temp interface{}
+		if err := json.Unmarshal([]byte(machineJson), &temp); err != nil {
+			return fmt.Errorf("failed to unmarshal: %w", err)
+		}
+		_ = yaml.NewEncoder(os.Stdout).Encode(&temp)
+		return nil
+	}
 
 	slog.Info(fmt.Sprintf("Looking up app %s/%s..", args.Org, args.App))
 	var existingApp *flymachinesclient.App
@@ -70,8 +87,7 @@ func Run(args Args) error {
 			existingApp = getAppResp.JSON200
 		case http.StatusNotFound:
 			if strings.Contains(string(getAppResp.Body), "Could not find App") {
-				slog.Info("Got a 404 for the App - assuming the App does not exist")
-				break
+				return fmt.Errorf("the Fly app '%s' does not exist - please create it", args.App)
 			}
 			fallthrough
 		default:
@@ -95,37 +111,10 @@ func Run(args Args) error {
 		slog.Info(fmt.Sprintf("Found %d machines.", len(existingMachines)))
 	}
 
-	if existingApp == nil {
-		slog.Info(fmt.Sprintf("Plan: create new app '%s' in org '%s'", args.App, args.Org))
-	}
 	if len(existingMachines) > 0 {
-		slog.Info(fmt.Sprintf("Plan: update or destroy %d existing machines in the app", len(existingMachines)))
+		slog.Info(fmt.Sprintf("Plan: update %d existing machines in the app", len(existingMachines)))
 	} else {
 		slog.Info(fmt.Sprintf("Plan: create 1 new machine in the app"))
-	}
-	if args.DryRun {
-		slog.Info("Stopping here and dumping yaml because --dry-run was provided")
-		var temp interface{}
-		if err := json.Unmarshal([]byte(machineJson), &temp); err != nil {
-			return fmt.Errorf("failed to unmarshal: %w", err)
-		}
-		_ = yaml.NewEncoder(os.Stdout).Encode(&temp)
-		return nil
-	}
-
-	if existingApp == nil {
-		slog.Info("Creating app..")
-		if createAppResp, err := client.AppsCreateWithResponse(context.Background(), flymachinesclient.CreateAppRequest{
-			OrgSlug: ref(args.Org),
-			AppName: ref(args.App),
-		}); err != nil {
-			return fmt.Errorf("failed to make create app request: %w", err)
-		} else {
-			if createAppResp.StatusCode() >= 300 {
-				return fmt.Errorf("unexpected status code when creating app '%d': '%s'", createAppResp.StatusCode(), string(createAppResp.Body))
-			}
-		}
-		slog.Info("App created.")
 	}
 
 	if len(existingMachines) > 0 {
@@ -138,7 +127,7 @@ func Run(args Args) error {
 				return fmt.Errorf("failed to make update machine request: %w", err)
 			} else {
 				if updateMachineResp.StatusCode() >= 300 {
-					return fmt.Errorf("unexpected status code when deleting machine '%d': '%s'", updateMachineResp.StatusCode(), string(updateMachineResp.Body))
+					return fmt.Errorf("unexpected status code when updating machine '%d': '%s'", updateMachineResp.StatusCode(), string(updateMachineResp.Body))
 				}
 			}
 		}
@@ -151,7 +140,7 @@ func Run(args Args) error {
 			return fmt.Errorf("failed to make create machine request: %w", err)
 		} else {
 			if machineCreateResp.StatusCode() != http.StatusOK {
-				return fmt.Errorf("unexpected status code when deleting machine '%d': '%s'", machineCreateResp.StatusCode(), string(machineCreateResp.Body))
+				return fmt.Errorf("unexpected status code when creating machine '%d': '%s'", machineCreateResp.StatusCode(), string(machineCreateResp.Body))
 			}
 			slog.Info(fmt.Sprintf("Created machine '%s'", *(machineCreateResp.JSON200.Name)))
 		}
