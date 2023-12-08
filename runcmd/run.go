@@ -69,7 +69,7 @@ func Run(args Args) error {
 	slog.Info(fmt.Sprintf("This deployment applies to App '%s' in Organization '%s'..", args.Org, args.App))
 
 	if args.DryRun {
-		slog.Info("Stopping here and dumping yaml because --dry-run was provided")
+		slog.Info("Stopping here and dumping yaml because --dry-run was provided.")
 		var temp interface{}
 		if err := json.Unmarshal([]byte(machineJson), &temp); err != nil {
 			return fmt.Errorf("failed to unmarshal: %w", err)
@@ -212,12 +212,21 @@ func convertMemoryToMegabytes(input string) (int, error) {
 }
 
 func convertScoreIntoMachine(spec *score.WorkloadSpec) (flymachinesclient.ApiMachineConfig, error) {
-	templating := templatesContext{meta: spec.Metadata}
+	templating := templatesContext{
+		meta:      spec.Metadata,
+		resources: spec.Resources,
+	}
 
 	output := flymachinesclient.ApiMachineConfig{}
 
 	for resourceName, resource := range spec.Resources {
 		switch resource.Type {
+		case "environment":
+			if len(resource.Params) > 0 {
+				return output, fmt.Errorf("resources: '%s': no params supported", resourceName)
+			} else if resource.Class != nil && *resource.Class == "default" {
+				return output, fmt.Errorf("resources: '%s': no non-default class supported", resourceName)
+			}
 		case "":
 			return output, fmt.Errorf("resources: '%s': missing resource type", resourceName)
 		default:

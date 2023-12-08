@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
@@ -17,7 +18,7 @@ var (
 // templatesContext ia an utility type that provides a context for '${...}' templates substitution
 type templatesContext struct {
 	meta      score.WorkloadSpecMetadata
-	resources score.Resource
+	resources score.WorkloadSpecResources
 }
 
 // Substitute replaces all matching '${...}' templates in a source string
@@ -48,7 +49,7 @@ func (ctx *templatesContext) mapVar(ref string) (string, error) {
 	if ref == "" || ref == "$" {
 		return ref, nil
 	}
-	var segments = strings.SplitN(ref, ".", 2)
+	var segments = strings.SplitN(ref, ".", 3)
 	switch segments[0] {
 	case "metadata":
 		if len(segments) == 2 {
@@ -62,6 +63,23 @@ func (ctx *templatesContext) mapVar(ref string) (string, error) {
 				}
 			} else {
 				return "", fmt.Errorf("expression '%s' refers to missing metadata key", ref)
+			}
+		}
+	case "resources":
+		if len(segments) == 3 {
+			resource, ok := ctx.resources[segments[1]]
+			if !ok {
+				return "", fmt.Errorf("undefined resource '%s'", segments[1])
+			}
+			switch resource.Type {
+			case "environment":
+				if v := os.Getenv(segments[2]); v != "" {
+					return v, nil
+				} else {
+					return "", fmt.Errorf("env var %s not set", segments[2])
+				}
+			default:
+				return "", fmt.Errorf("no properties resolvable from resource of type '%s'", resource.Type)
 			}
 		}
 	}
