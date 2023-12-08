@@ -1,8 +1,14 @@
 package runcmd
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"reflect"
 	"strconv"
 	"testing"
+
+	"github.com/astromechza/score-flyio/flymachinesclient"
+	"github.com/astromechza/score-flyio/score"
 )
 
 func Test_convertCpu(t *testing.T) {
@@ -68,6 +74,70 @@ func Test_convertMemory(t *testing.T) {
 					t.Errorf("expected no error, got '%s'", err.Error())
 				} else if v != tc.output {
 					t.Errorf("expected '%d', got '%d'", tc.output, v)
+				}
+			}
+		})
+	}
+}
+
+func Test_convertSpecTests(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		input  score.WorkloadSpec
+		output flymachinesclient.ApiMachineConfig
+		error  string
+	}{
+		{
+			name: "metadata substitutions",
+			input: score.WorkloadSpec{
+				Metadata: map[string]interface{}{"thing": 42},
+				Containers: map[string]score.Container{
+					"c": {
+						Variables: map[string]string{
+							"A": "B",
+							"B": "$$C",
+							"C": "${metadata.thing}",
+						},
+						Files: []score.ContainerFilesElem{{
+							Target:  "/path",
+							Content: "hello ${metadata.thing}",
+						}},
+					},
+				},
+			},
+			output: flymachinesclient.ApiMachineConfig{
+				Image:     ref(""),
+				Files:     ref([]flymachinesclient.ApiFile{{GuestPath: ref("/path"), RawValue: ref(base64.StdEncoding.EncodeToString([]byte("hello 42")))}}),
+				Processes: ref([]flymachinesclient.ApiMachineProcess{{Env: ref(map[string]string{"A": "B", "B": "$C", "C": "42"})}}),
+			},
+		},
+		{
+			name:  "bad var substitution",
+			input: score.WorkloadSpec{Containers: map[string]score.Container{"c": {Variables: map[string]string{"A": "${thing}"}}}},
+			error: "containers.c.variables.A: failed to interpolate: unsupported expression reference 'thing'",
+		},
+		{
+			name:  "bad files substitution",
+			input: score.WorkloadSpec{Containers: map[string]score.Container{"c": {Files: []score.ContainerFilesElem{{Target: "/", Content: "${thing}"}}}}},
+			error: "containers.c.files[0]: failed to substitute content: unsupported expression reference 'thing'",
+		},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			o, err := convertScoreIntoMachine(&tc.input)
+			if tc.error != "" {
+				if err == nil {
+					t.Errorf("no error, expected '%s'", tc.error)
+				} else if err.Error() != tc.error {
+					t.Errorf("expected error '%s' got '%s'", tc.error, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("expected no error, got '%s'", err.Error())
+				} else if !reflect.DeepEqual(tc.output, o) {
+					expected, _ := json.MarshalIndent(tc.output, "", "  ")
+					actual, _ := json.MarshalIndent(o, "", "  ")
+					t.Errorf("expected:\n%s\n, got:\n %s", string(expected), string(actual))
 				}
 			}
 		})

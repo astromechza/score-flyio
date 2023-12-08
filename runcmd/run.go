@@ -212,6 +212,8 @@ func convertMemoryToMegabytes(input string) (int, error) {
 }
 
 func convertScoreIntoMachine(spec *score.WorkloadSpec) (flymachinesclient.ApiMachineConfig, error) {
+	templating := templatesContext{meta: spec.Metadata}
+
 	output := flymachinesclient.ApiMachineConfig{}
 
 	for resourceName, resource := range spec.Resources {
@@ -226,8 +228,9 @@ func convertScoreIntoMachine(spec *score.WorkloadSpec) (flymachinesclient.ApiMac
 	if len(spec.Containers) != 1 {
 		return output, fmt.Errorf("score spec contains more than 1 container")
 	}
+	var containerName string
 	var container score.Container
-	for _, container = range spec.Containers {
+	for containerName, container = range spec.Containers {
 		break
 	}
 	output.Image = ref(container.Image)
@@ -239,8 +242,15 @@ func convertScoreIntoMachine(spec *score.WorkloadSpec) (flymachinesclient.ApiMac
 		process.Cmd = ref(container.Args)
 	}
 	if container.Variables != nil {
-		var env map[string]string = container.Variables
-		process.Env = ref(env)
+		outputEnv := make(map[string]string, len(container.Variables))
+		for k, v := range container.Variables {
+			if v2, err := templating.Substitute(v); err != nil {
+				return output, fmt.Errorf("containers.%s.variables.%s: failed to interpolate: %w", containerName, k, err)
+			} else {
+				outputEnv[k] = v2
+			}
+		}
+		process.Env = ref(outputEnv)
 	}
 	if process.Cmd != nil || process.Entrypoint != nil || process.Env != nil {
 		output.Processes = &[]flymachinesclient.ApiMachineProcess{process}
@@ -310,21 +320,26 @@ func convertScoreIntoMachine(spec *score.WorkloadSpec) (flymachinesclient.ApiMac
 		outputFiles := make([]flymachinesclient.ApiFile, 0)
 		for i, containerFile := range container.Files {
 			if containerFile.Mode != nil {
-				return output, fmt.Errorf("containers: files[%d]: mode is not supported", i)
-			} else if containerFile.NoExpand != nil && *containerFile.NoExpand == false {
-				return output, fmt.Errorf("containers: files[%d]: expand is not supported", i)
+				return output, fmt.Errorf("containers.%s.files[%d]]: mode is not supported", containerName, i)
 			}
 			var rawContent string
 			if v, ok := containerFile.Content.(string); ok && v != "" {
 				rawContent = v
 			} else if containerFile.Source != nil {
 				if rawData, err := os.ReadFile(*containerFile.Source); err != nil {
-					return output, fmt.Errorf("containers: files[%d]: failed to read source: %w", i, err)
+					return output, fmt.Errorf("containers.%s.files[%d]: failed to read source: %w", containerName, i, err)
 				} else {
 					rawContent = string(rawData)
 				}
 			} else {
-				return output, fmt.Errorf("containers: files[%d]: is missing source or content", i)
+				return output, fmt.Errorf("containers.%s.files[%d]: is missing source or content", containerName, i)
+			}
+			if containerFile.NoExpand == nil || !*containerFile.NoExpand {
+				if substituted, err := templating.Substitute(rawContent); err != nil {
+					return output, fmt.Errorf("containers.%s.files[%d]: failed to substitute content: %w", containerName, i, err)
+				} else {
+					rawContent = substituted
+				}
 			}
 			rawContent = base64.StdEncoding.EncodeToString([]byte(rawContent))
 			outputFiles = append(outputFiles, flymachinesclient.ApiFile{
