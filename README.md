@@ -33,6 +33,8 @@ $ score-flyio run --app score-flyio-1234 examples/01-hello-world.score.yaml
 The supported resource types are:
 
 - `environment` - For accessing local environment variables. Properties can be used for accessing environment variables like `${resources.env.SOME_KEY}`.
+- `dns` - For accessing a useful hostname of the deployment. The only available property is `host`, a hostname. The default class will return `<app>.internal`, while the `external` class will return the external hostname.
+  - **NOTE:** The `external` class depends on a shared-ipv4 address being provisioned for the app.
 
 ### Metadata Interpolation
 

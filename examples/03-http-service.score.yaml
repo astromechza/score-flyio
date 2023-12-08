@@ -14,6 +14,9 @@ containers:
     - target: /usr/share/nginx/html/README.html
       content: |
         <html><p>Hello World</p></html>
+    variables:
+      EXTERNAL_SCHEME: http://
+      EXTERNAL_HOSTNAME: ${resources.external-dns.host}
 
 service:
   ports:
@@ -21,3 +24,8 @@ service:
       protocol: tcp
       port: 80
       targetPort: 80
+
+resources:
+  external-dns:
+    type: dns
+    class: external

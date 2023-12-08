@@ -29,7 +29,7 @@ func Run(args Args) error {
 	}
 	slog.Info("Score input is valid.")
 
-	asMachine, err := convertScoreIntoMachine(scoreSpec)
+	asMachine, err := convertScoreIntoMachine(args.App, scoreSpec)
 	if err != nil {
 		return fmt.Errorf("failed to convert score to Fly machine: %w", err)
 	}
@@ -211,10 +211,10 @@ func convertMemoryToMegabytes(input string) (int, error) {
 	return int(value), nil
 }
 
-func convertScoreIntoMachine(spec *score.WorkloadSpec) (flymachinesclient.ApiMachineConfig, error) {
+func convertScoreIntoMachine(appName string, spec *score.WorkloadSpec) (flymachinesclient.ApiMachineConfig, error) {
 	templating := templatesContext{
-		meta:      spec.Metadata,
-		resources: spec.Resources,
+		meta:               spec.Metadata,
+		resourceProperties: map[string]map[string]interface{}{},
 	}
 
 	output := flymachinesclient.ApiMachineConfig{}
@@ -224,8 +224,30 @@ func convertScoreIntoMachine(spec *score.WorkloadSpec) (flymachinesclient.ApiMac
 		case "environment":
 			if len(resource.Params) > 0 {
 				return output, fmt.Errorf("resources: '%s': no params supported", resourceName)
-			} else if resource.Class != nil && *resource.Class == "default" {
-				return output, fmt.Errorf("resources: '%s': no non-default class supported", resourceName)
+			} else if resource.Class != nil && *resource.Class != "default" {
+				return output, fmt.Errorf("resources: '%s': environment.'%s' class not supported", resourceName, *resource.Class)
+			}
+			// TODO: should we require this to come from an env file
+			currentEnvironment := map[string]interface{}{}
+			for _, s := range os.Environ() {
+				parts := strings.SplitN(s, "=", 2)
+				currentEnvironment[parts[0]] = parts[1]
+			}
+			templating.resourceProperties[resourceName] = currentEnvironment
+		case "dns":
+			if len(resource.Params) > 0 {
+				return output, fmt.Errorf("resources: '%s': no params supported", resourceName)
+			}
+			if resource.Class == nil || *resource.Class == "default" {
+				templating.resourceProperties[resourceName] = map[string]interface{}{
+					"host": fmt.Sprintf("%s.internal", appName),
+				}
+			} else if *resource.Class == "external" {
+				templating.resourceProperties[resourceName] = map[string]interface{}{
+					"host": fmt.Sprintf("%s.fly.dev", appName),
+				}
+			} else {
+				return output, fmt.Errorf("resources: '%s': dns.'%s' class not supported", resourceName, *resource.Class)
 			}
 		case "":
 			return output, fmt.Errorf("resources: '%s': missing resource type", resourceName)
