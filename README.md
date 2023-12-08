@@ -15,7 +15,7 @@ go: downloading github.com/astromechza/score-flyio v0.0.0-20231206214427-f5eb613
 $ which score-flyio
 /Users/bmeier/.gvm/pkgsets/go1.21.0/global/bin/score-flyio
 
-$ score-flyio deploy --app score-flyio-1234 examples/01-hello-world.yaml
+$ score-flyio run --app score-flyio-1234 examples/01-hello-world.yaml
 ```
 
 Any services will be converted into Fly.io Machine services.

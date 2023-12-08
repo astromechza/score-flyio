@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/astromechza/score-flyio/deploy"
+	"github.com/astromechza/score-flyio/runcmd"
 )
 
 const (
@@ -34,7 +34,7 @@ type argsStruct struct {
 	Debug bool
 
 	Subcommand string
-	DeployArgs deploy.Args
+	DeployArgs runcmd.Args
 }
 
 func parse(args []string, output io.Writer) (argsStruct, error) {
@@ -61,8 +61,8 @@ func parse(args []string, output io.Writer) (argsStruct, error) {
 	}
 	receiver.Subcommand = fs.Arg(0)
 	switch fs.Arg(0) {
-	case deploy.FlagSubcommand:
-		subArgs, err := deploy.ParseFlagArgs(fs)
+	case runcmd.FlagSubcommand:
+		subArgs, err := runcmd.ParseFlagArgs(fs)
 		if err != nil {
 			return *receiver, err
 		}
@@ -84,8 +84,8 @@ func mainInner(args []string, output io.Writer) error {
 		slog.SetDefault(slog.New(slog.NewTextHandler(output, &slog.HandlerOptions{AddSource: true, Level: slog.LevelDebug})))
 	}
 	switch parsedArgs.Subcommand {
-	case deploy.FlagSubcommand:
-		return deploy.Run(parsedArgs.DeployArgs)
+	case runcmd.FlagSubcommand:
+		return runcmd.Run(parsedArgs.DeployArgs)
 	}
 	return nil
 }
