@@ -16,6 +16,7 @@ import (
 	"github.com/tidwall/sjson"
 	"gopkg.in/yaml.v3"
 
+	"github.com/astromechza/score-flyio/flygraphqlclient"
 	"github.com/astromechza/score-flyio/flymachinesclient"
 	"github.com/astromechza/score-flyio/score"
 )
@@ -53,10 +54,6 @@ func Run(args Args) error {
 		slog.Debug(machineJson)
 	}
 
-	client, err := flymachinesclient.BuildScoreClient()
-	if err != nil {
-		return err
-	}
 	if args.App == "" {
 		args.App = scoreSpec.Metadata["name"].(string)
 	}
@@ -78,9 +75,19 @@ func Run(args Args) error {
 		return nil
 	}
 
+	machinesClient, err := flymachinesclient.BuildScoreClient()
+	if err != nil {
+		return err
+	}
+
+	graphClient, err := flygraphqlclient.BuildGraphQlClient()
+	if err != nil {
+		return err
+	}
+
 	slog.Info(fmt.Sprintf("Looking up app %s/%s..", args.Org, args.App))
 	var existingApp *flymachinesclient.App
-	if getAppResp, err := client.AppsShowWithResponse(context.Background(), args.App); err != nil {
+	if getAppResp, err := machinesClient.AppsShowWithResponse(context.Background(), args.App); err != nil {
 		return fmt.Errorf("failed to make show app request: %w", err)
 	} else {
 		switch getAppResp.StatusCode() {
@@ -96,10 +103,17 @@ func Run(args Args) error {
 		}
 	}
 
+	slog.Info(fmt.Sprintf("Looking up hostname and shared ips"))
+	appExtras, err := flygraphqlclient.GetAppExtras(context.Background(), graphClient, args.App)
+	if err != nil {
+		return fmt.Errorf("failed to load app extras: %w", err)
+	}
+	slog.Debug("App extras", "extras", appExtras)
+
 	var existingMachines []flymachinesclient.Machine
 	if existingApp != nil {
 		slog.Info(fmt.Sprintf("Looking up machines for app %s/%s..", args.Org, args.App))
-		if listMachinesResp, err := client.MachinesListWithResponse(context.Background(), args.App, &flymachinesclient.MachinesListParams{}); err != nil {
+		if listMachinesResp, err := machinesClient.MachinesListWithResponse(context.Background(), args.App, &flymachinesclient.MachinesListParams{}); err != nil {
 			return fmt.Errorf("failed to make list machines request: %w", err)
 		} else {
 			switch listMachinesResp.StatusCode() {
@@ -121,7 +135,7 @@ func Run(args Args) error {
 	if len(existingMachines) > 0 {
 		for _, machine := range existingMachines {
 			slog.Info(fmt.Sprintf("Updating machine '%s'..", *machine.Name))
-			if updateMachineResp, err := client.MachinesUpdateWithResponse(context.Background(), args.App, *machine.Id, flymachinesclient.UpdateMachineRequest{
+			if updateMachineResp, err := machinesClient.MachinesUpdateWithResponse(context.Background(), args.App, *machine.Id, flymachinesclient.UpdateMachineRequest{
 				Config:     ref(asMachine),
 				SkipLaunch: ref(false),
 			}); err != nil {
@@ -134,7 +148,7 @@ func Run(args Args) error {
 		}
 	} else {
 		slog.Info(fmt.Sprintf("Creating machine.."))
-		if machineCreateResp, err := client.MachinesCreateWithResponse(context.Background(), args.App, flymachinesclient.CreateMachineRequest{
+		if machineCreateResp, err := machinesClient.MachinesCreateWithResponse(context.Background(), args.App, flymachinesclient.CreateMachineRequest{
 			Config:     ref(asMachine),
 			SkipLaunch: ref(false),
 		}); err != nil {

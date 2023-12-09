@@ -1,0 +1,21 @@
+query GetAppExtras($appId: String!) {
+    app(name: $appId) {
+        sharedIpAddress
+        hostname
+        regions {
+            code
+            name
+        }
+        volumes {
+            nodes {
+                name
+                id
+                region
+                sizeGb
+                attachedMachine {
+                    id
+                }
+            }
+        }
+    }
+}
