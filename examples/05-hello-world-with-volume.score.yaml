@@ -8,5 +8,5 @@ containers:
     image: busybox
     command: ["/bin/sh", "-c", "while true; do echo Hello ${NAME}!; sleep 5; done"]
     volumes:
-      - source: hello-world-vol
+      - source: vol_d42ew5k8gyzypp74
         target: /mnt

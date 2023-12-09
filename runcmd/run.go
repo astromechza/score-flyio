@@ -263,6 +263,13 @@ func convertScoreIntoMachine(appName string, spec *score.WorkloadSpec) (flymachi
 			} else {
 				return output, fmt.Errorf("resources: '%s': dns.'%s' class not supported", resourceName, *resource.Class)
 			}
+		case "volume":
+			if len(resource.Params) > 0 {
+				return output, fmt.Errorf("resources: '%s': no params supported", resourceName)
+			} else if resource.Class != nil && *resource.Class != "default" {
+				return output, fmt.Errorf("resources: '%s': volume.'%s' class not supported", resourceName, *resource.Class)
+			}
+			return output, fmt.Errorf("resources: volume not implemented yet")
 		case "":
 			return output, fmt.Errorf("resources: '%s': missing resource type", resourceName)
 		default:
@@ -407,13 +414,13 @@ func convertScoreIntoMachine(appName string, spec *score.WorkloadSpec) (flymachi
 			if volume.Path != nil && *volume.Path != "/" {
 				return output, fmt.Errorf("containers.%s.volumes[%d]: subpath not supported", containerName, i)
 			}
-			volName, err := templating.Substitute(volume.Source)
+			volumeId, err := templating.Substitute(volume.Source)
 			if err != nil {
 				return output, fmt.Errorf("containers.%s.volumes[%d].source: failed to substitue: %w", containerName, i, err)
 			}
 			mounts = append(mounts, flymachinesclient.ApiMachineMount{
-				Name: ref(volName),
-				Path: ref(volume.Target),
+				Volume: ref(volumeId),
+				Path:   ref(volume.Target),
 			})
 		}
 		output.Mounts = &mounts
