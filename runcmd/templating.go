@@ -65,16 +65,24 @@ func (ctx *templatesContext) mapVar(ref string) (string, error) {
 			}
 		}
 	case "resources":
-		if len(segments) == 3 {
+		if len(segments) > 1 {
 			resource, ok := ctx.resourceProperties[segments[1]]
 			if !ok {
 				return "", fmt.Errorf("undefined resource '%s'", segments[1])
 			}
-			property, ok := resource[segments[2]]
-			if !ok {
-				return "", fmt.Errorf("property %s not set on resource type", segments[2])
+			if len(segments) == 2 {
+				property, ok := resource[""]
+				if !ok {
+					return "", fmt.Errorf("resource type requires a property key")
+				}
+				return fmt.Sprint(property), nil
+			} else if len(segments) == 3 {
+				property, ok := resource[segments[2]]
+				if !ok {
+					return "", fmt.Errorf("property %s not set on resource type", segments[2])
+				}
+				return fmt.Sprint(property), nil
 			}
-			return fmt.Sprint(property), nil
 		}
 	}
 	return "", fmt.Errorf("unsupported expression reference '%s'", ref)
