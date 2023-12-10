@@ -194,6 +194,16 @@ func Test_convertSpecTests(t *testing.T) {
 				Mounts: &[]flymachinesclient.ApiMachineMount{{Path: ref("/path"), Volume: ref("vol_123456789")}},
 			},
 		},
+		{
+			name: "service without port",
+			input: score.WorkloadSpec{
+				Containers: map[string]score.Container{"c": {}},
+				Service: &score.WorkloadSpecService{
+					Ports: map[string]score.ServicePort{"my-port": {}},
+				},
+			},
+			error: "service: 'my-port' must have a port specified",
+		},
 	} {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {

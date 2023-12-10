@@ -28,6 +28,37 @@ $ score-flyio run --app score-flyio-1234 examples/01-hello-world.score.yaml
 
 ## Supported Score Features
 
+- [X] `metadata`
+- ⚠️ `container` (**NOTE:** only 1 container can be specified)
+  - [X] `image` (naturally)
+  - [X] `command`
+  - [X] `args`
+  - [X] `variables`
+  - 🗒️️ `files`
+    - [X] `target`
+    - [ ] `mode` (not supported)
+    - [X] `content`
+    - [X] `source`
+    - [X] `noExpand`
+  - 🗒️ `volumes`
+    - [X] `source` (this should be the volume id that exists, or comes from a resource)
+    - [X] `target`
+    - [ ] `path` (not supported)
+    - [ ] `read_only` (not supported)
+  - 🗒️ `resources` (**NOTE:** uses `limits` and falls back to `requests`)
+    - [X] `limits`
+    - [X] `requests`
+  - [X] `livenessProbe`
+  - [X] `readinessProbe`
+- [X] `resources`
+  - [X] `metadata`
+  - [X] `type`
+  - [X] `class`
+- 🗒️ `service`
+  - [X] `port`
+  - [X] `protocol`
+  - [X] `targetPort`
+
 ### Supported Resource Types
 
 The supported resource types are:
@@ -35,6 +66,8 @@ The supported resource types are:
 - `environment` - For accessing local environment variables. Properties can be used for accessing environment variables like `${resources.env.SOME_KEY}`.
 - `dns` - For accessing a useful hostname of the deployment. The only available property is `host`, a hostname. The default class will return `<app>.internal`, while the `external` class will return the external hostname.
   - **NOTE:** The `external` class depends on a shared-ipv4 address being provisioned for the app.
+- `volume` - For accessing the volume id of an existing volume that's not attached or already attached to the current machine. It can be referenced via `${resources.vol-name}`.
+  - **NOTE:** At some point we'll work out how to provision the volume here if needed as well! (TODO).
 
 ### Metadata Interpolation
 
