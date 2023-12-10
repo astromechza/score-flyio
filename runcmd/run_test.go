@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/astromechza/score-flyio/flygraphqlclient"
 	"github.com/astromechza/score-flyio/flymachinesclient"
 	"github.com/astromechza/score-flyio/score"
 )
@@ -180,10 +181,25 @@ func Test_convertSpecTests(t *testing.T) {
 			},
 			error: "resources: 'd': dns.'unknown' class not supported",
 		},
+		{
+			name: "existing volume id",
+			input: score.WorkloadSpec{
+				Containers: map[string]score.Container{"c": {Volumes: []score.ContainerVolumesElem{{Source: "${resources.v}", Target: "/path"}}}},
+				Resources: map[string]score.Resource{"v": {Type: "volume", Metadata: map[string]interface{}{"annotations": score.ResourceMetadata{
+					"score-flyio/volume_id": "vol_123456789",
+				}}}},
+			},
+			output: flymachinesclient.ApiMachineConfig{
+				Image:  ref(""),
+				Mounts: &[]flymachinesclient.ApiMachineMount{{Path: ref("/path"), Volume: ref("vol_123456789")}},
+			},
+		},
 	} {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			o, err := convertScoreIntoMachine("my-app", &tc.input)
+			o, err := convertScoreIntoMachine("my-app", &tc.input, flygraphqlclient.GetAppExtrasApp{
+				Hostname: "my-app.fly.dev",
+			})
 			if tc.error != "" {
 				if err == nil {
 					t.Errorf("no error, expected '%s'", tc.error)

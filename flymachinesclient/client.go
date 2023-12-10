@@ -3,6 +3,7 @@ package flymachinesclient
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/astromechza/score-flyio/fly"
@@ -18,6 +19,7 @@ func BuildScoreClient() (ClientWithResponsesInterface, error) {
 	client, err := NewClientWithResponses("https://api.machines.dev/v1", func(client *Client) error {
 		client.RequestEditors = append(client.RequestEditors, func(ctx context.Context, req *http.Request) error {
 			req.Header.Set("Authorization", "Bearer "+accessToken)
+			slog.Info(fmt.Sprintf("%s %s", req.Method, req.URL.Path))
 			return nil
 		})
 		return nil

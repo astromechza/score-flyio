@@ -30,7 +30,44 @@ func Run(args Args) error {
 	}
 	slog.Info("Score input is valid.")
 
-	asMachine, err := convertScoreIntoMachine(args.App, scoreSpec)
+	// construct the clients first here
+	machinesClient, err := flymachinesclient.BuildScoreClient()
+	if err != nil {
+		return err
+	}
+	graphClient, err := flygraphqlclient.BuildGraphQlClient()
+	if err != nil {
+		return err
+	}
+
+	// now load the app and extras information
+
+	slog.Info(fmt.Sprintf("Looking up app %s/%s..", args.Org, args.App))
+	var existingApp *flymachinesclient.App
+	if getAppResp, err := machinesClient.AppsShowWithResponse(context.Background(), args.App); err != nil {
+		return fmt.Errorf("failed to make show app request: %w", err)
+	} else {
+		switch getAppResp.StatusCode() {
+		case http.StatusOK:
+			existingApp = getAppResp.JSON200
+		case http.StatusNotFound:
+			if strings.Contains(string(getAppResp.Body), "Could not find App") {
+				return fmt.Errorf("the Fly app '%s' does not exist - please create it", args.App)
+			}
+			fallthrough
+		default:
+			return fmt.Errorf("unexpected status code when showing app '%d': '%s'", getAppResp.StatusCode(), string(getAppResp.Body))
+		}
+	}
+
+	slog.Info(fmt.Sprintf("Looking up hostname and shared ips"))
+	appExtras, err := flygraphqlclient.GetAppExtras(context.Background(), graphClient, args.App)
+	if err != nil {
+		return fmt.Errorf("failed to load app extras: %w", err)
+	}
+	slog.Debug("App extras", "extras", appExtras)
+
+	asMachine, err := convertScoreIntoMachine(args.App, scoreSpec, appExtras.App)
 	if err != nil {
 		return fmt.Errorf("failed to convert score to Fly machine: %w", err)
 	}
@@ -74,41 +111,6 @@ func Run(args Args) error {
 		_ = yaml.NewEncoder(os.Stdout).Encode(&temp)
 		return nil
 	}
-
-	machinesClient, err := flymachinesclient.BuildScoreClient()
-	if err != nil {
-		return err
-	}
-
-	graphClient, err := flygraphqlclient.BuildGraphQlClient()
-	if err != nil {
-		return err
-	}
-
-	slog.Info(fmt.Sprintf("Looking up app %s/%s..", args.Org, args.App))
-	var existingApp *flymachinesclient.App
-	if getAppResp, err := machinesClient.AppsShowWithResponse(context.Background(), args.App); err != nil {
-		return fmt.Errorf("failed to make show app request: %w", err)
-	} else {
-		switch getAppResp.StatusCode() {
-		case http.StatusOK:
-			existingApp = getAppResp.JSON200
-		case http.StatusNotFound:
-			if strings.Contains(string(getAppResp.Body), "Could not find App") {
-				return fmt.Errorf("the Fly app '%s' does not exist - please create it", args.App)
-			}
-			fallthrough
-		default:
-			return fmt.Errorf("unexpected status code when showing app '%d': '%s'", getAppResp.StatusCode(), string(getAppResp.Body))
-		}
-	}
-
-	slog.Info(fmt.Sprintf("Looking up hostname and shared ips"))
-	appExtras, err := flygraphqlclient.GetAppExtras(context.Background(), graphClient, args.App)
-	if err != nil {
-		return fmt.Errorf("failed to load app extras: %w", err)
-	}
-	slog.Debug("App extras", "extras", appExtras)
 
 	var existingMachines []flymachinesclient.Machine
 	if existingApp != nil {
@@ -225,7 +227,7 @@ func convertMemoryToMegabytes(input string) (int, error) {
 	return int(value), nil
 }
 
-func convertScoreIntoMachine(appName string, spec *score.WorkloadSpec) (flymachinesclient.ApiMachineConfig, error) {
+func convertScoreIntoMachine(appName string, spec *score.WorkloadSpec, appExtras flygraphqlclient.GetAppExtrasApp) (flymachinesclient.ApiMachineConfig, error) {
 	templating := templatesContext{
 		meta:               spec.Metadata,
 		resourceProperties: map[string]map[string]interface{}{},
@@ -258,7 +260,7 @@ func convertScoreIntoMachine(appName string, spec *score.WorkloadSpec) (flymachi
 				}
 			} else if *resource.Class == "external" {
 				templating.resourceProperties[resourceName] = map[string]interface{}{
-					"host": fmt.Sprintf("%s.fly.dev", appName),
+					"host": appExtras.Hostname,
 				}
 			} else {
 				return output, fmt.Errorf("resources: '%s': dns.'%s' class not supported", resourceName, *resource.Class)
@@ -269,7 +271,13 @@ func convertScoreIntoMachine(appName string, spec *score.WorkloadSpec) (flymachi
 			} else if resource.Class != nil && *resource.Class != "default" {
 				return output, fmt.Errorf("resources: '%s': volume.'%s' class not supported", resourceName, *resource.Class)
 			}
-			return output, fmt.Errorf("resources: volume not implemented yet")
+			if annotations, ok := resource.Metadata["annotations"].(score.ResourceMetadata); ok {
+				if volumeId, ok := annotations["score-flyio/volume_id"].(string); ok {
+					templating.resourceProperties[resourceName] = map[string]interface{}{"": volumeId}
+					break
+				}
+			}
+			return output, fmt.Errorf("resources: '%s': metadata.annotations.score-flyio/volume_id should be the Fly.io volume id", resourceName)
 		case "":
 			return output, fmt.Errorf("resources: '%s': missing resource type", resourceName)
 		default:

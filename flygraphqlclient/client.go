@@ -1,6 +1,8 @@
 package flygraphqlclient
 
 import (
+	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/Khan/genqlient/graphql"
@@ -17,6 +19,7 @@ type customDoer struct {
 
 func (c *customDoer) Do(request *http.Request) (*http.Response, error) {
 	request.Header.Set("Authorization", "Bearer "+c.accessToken)
+	slog.Info(fmt.Sprintf("%s %s", request.Method, request.URL.Path))
 	return c.client.Do(request)
 }
 

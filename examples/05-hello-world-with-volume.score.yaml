@@ -8,5 +8,12 @@ containers:
     image: busybox
     command: ["/bin/sh", "-c", "while true; do echo Hello ${NAME}!; sleep 5; done"]
     volumes:
-      - source: vol_d42ew5k8gyzypp74
+      - source: ${resources.vol}
         target: /mnt
+
+resources:
+  vol:
+    metadata:
+      annotations:
+        score-flyio/volume_id: vol_d42ew5k8gyzypp74
+    type: volume
