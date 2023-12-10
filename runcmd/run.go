@@ -361,10 +361,21 @@ func convertScoreIntoMachine(appName string, spec *score.WorkloadSpec, appExtras
 
 	if spec.Service != nil && len(spec.Service.Ports) > 0 {
 		flyServices := make([]flymachinesclient.ApiMachineService, 0)
-		for _, portSpec := range spec.Service.Ports {
+		for portName, portSpec := range spec.Service.Ports {
+			internalPort := portSpec.Port
+			if internalPort == 0 && portSpec.TargetPort == nil {
+				return output, fmt.Errorf("service: '%s' must have a port specified", portName)
+			}
+			targetPort := portSpec.Port
+			if portSpec.TargetPort != nil && *portSpec.TargetPort > 0 {
+				targetPort = *portSpec.TargetPort
+				if internalPort == 0 {
+					internalPort = targetPort
+				}
+			}
 			flyServices = append(flyServices, flymachinesclient.ApiMachineService{
 				Protocol:     portSpec.Protocol,
-				InternalPort: portSpec.TargetPort,
+				InternalPort: ref(portSpec.Port),
 				Ports: &[]flymachinesclient.ApiMachinePort{
 					{
 						Port:     ref(portSpec.Port),
