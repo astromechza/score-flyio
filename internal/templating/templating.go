@@ -1,4 +1,4 @@
-package runcmd
+package templating
 
 import (
 	"encoding/json"
@@ -14,14 +14,14 @@ var (
 	placeholderRegEx = regexp.MustCompile(`\$(\$|{([a-zA-Z0-9.\-_\[\]"'#]+)})`)
 )
 
-// templatesContext ia an utility type that provides a context for '${...}' templates substitution
-type templatesContext struct {
-	meta               score.WorkloadSpecMetadata
-	resourceProperties map[string]map[string]interface{}
+// Context ia an utility type that provides a context for '${...}' templates substitution
+type Context struct {
+	Meta               score.WorkloadSpecMetadata
+	ResourceProperties map[string]map[string]interface{}
 }
 
 // Substitute replaces all matching '${...}' templates in a source string
-func (ctx *templatesContext) Substitute(src string) (string, error) {
+func (ctx *Context) Substitute(src string) (string, error) {
 	subErrors := make([]error, 0)
 	output := placeholderRegEx.ReplaceAllStringFunc(src, func(str string) string {
 		matches := placeholderRegEx.FindStringSubmatch(str)
@@ -44,7 +44,7 @@ func (ctx *templatesContext) Substitute(src string) (string, error) {
 
 // MapVar replaces objects and properties references with corresponding values
 // Returns an empty string if the reference can't be resolved
-func (ctx *templatesContext) mapVar(ref string) (string, error) {
+func (ctx *Context) mapVar(ref string) (string, error) {
 	if ref == "" || ref == "$" {
 		return ref, nil
 	}
@@ -52,7 +52,7 @@ func (ctx *templatesContext) mapVar(ref string) (string, error) {
 	switch segments[0] {
 	case "metadata":
 		if len(segments) == 2 {
-			if val, exists := ctx.meta[segments[1]]; exists {
+			if val, exists := ctx.Meta[segments[1]]; exists {
 				switch typed := val.(type) {
 				case string:
 					return typed, nil
@@ -66,7 +66,7 @@ func (ctx *templatesContext) mapVar(ref string) (string, error) {
 		}
 	case "resources":
 		if len(segments) > 1 {
-			resource, ok := ctx.resourceProperties[segments[1]]
+			resource, ok := ctx.ResourceProperties[segments[1]]
 			if !ok {
 				return "", fmt.Errorf("undefined resource '%s'", segments[1])
 			}

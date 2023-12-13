@@ -1,8 +1,0 @@
-schema: schema.graphql
-operations:
-  - queries.graphql
-generated: generated.go
-package: flygraphqlclient
-bindings:
-  DateTime:
-    type: time.Time

@@ -1,15 +1,13 @@
-package runcmd
+package convert
 
 import (
 	"encoding/base64"
 	"encoding/json"
 	"os"
-	"reflect"
 	"strconv"
 	"testing"
 
-	"github.com/astromechza/score-flyio/flygraphqlclient"
-	"github.com/astromechza/score-flyio/flymachinesclient"
+	"github.com/astromechza/score-flyio/flytoml"
 	"github.com/astromechza/score-flyio/score"
 )
 
@@ -87,7 +85,7 @@ func Test_convertSpecTests(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		input  score.WorkloadSpec
-		output flymachinesclient.ApiMachineConfig
+		output flytoml.Config
 		error  string
 	}{
 		{
@@ -96,6 +94,7 @@ func Test_convertSpecTests(t *testing.T) {
 				Metadata: map[string]interface{}{"thing": 42},
 				Containers: map[string]score.Container{
 					"c": {
+						Image: "my-image",
 						Variables: map[string]string{
 							"A": "B",
 							"B": "$$C",
@@ -108,10 +107,12 @@ func Test_convertSpecTests(t *testing.T) {
 					},
 				},
 			},
-			output: flymachinesclient.ApiMachineConfig{
-				Image:     ref(""),
-				Files:     ref([]flymachinesclient.ApiFile{{GuestPath: ref("/path"), RawValue: ref(base64.StdEncoding.EncodeToString([]byte("hello 42")))}}),
-				Processes: ref([]flymachinesclient.ApiMachineProcess{{Env: ref(map[string]string{"A": "B", "B": "$C", "C": "42"})}}),
+			output: flytoml.Config{
+				Build: &flytoml.Build{Image: "my-image"},
+				Env: map[string]string{
+					"A": "B", "B": "$C", "C": "42",
+				},
+				Files: []flytoml.File{{GuestPath: "/path", RawValue: base64.StdEncoding.EncodeToString([]byte("hello 42"))}},
 			},
 		},
 		{
@@ -130,9 +131,11 @@ func Test_convertSpecTests(t *testing.T) {
 				Containers: map[string]score.Container{"c": {Variables: map[string]string{"A": "${resources.env.SOME_KEY}"}}},
 				Resources:  map[string]score.Resource{"env": {Type: "environment"}},
 			},
-			output: flymachinesclient.ApiMachineConfig{
-				Image:     ref(""),
-				Processes: ref([]flymachinesclient.ApiMachineProcess{{Env: ref(map[string]string{"A": "SOME_VALUE"})}}),
+			output: flytoml.Config{
+				Build: &flytoml.Build{Image: ""},
+				Env: map[string]string{
+					"A": "SOME_VALUE",
+				},
 			},
 		},
 		{
@@ -157,9 +160,11 @@ func Test_convertSpecTests(t *testing.T) {
 				Containers: map[string]score.Container{"c": {Variables: map[string]string{"A": "${resources.d.host}"}}},
 				Resources:  map[string]score.Resource{"d": {Type: "dns"}},
 			},
-			output: flymachinesclient.ApiMachineConfig{
-				Image:     ref(""),
-				Processes: ref([]flymachinesclient.ApiMachineProcess{{Env: ref(map[string]string{"A": "my-app.internal"})}}),
+			output: flytoml.Config{
+				Build: &flytoml.Build{Image: ""},
+				Env: map[string]string{
+					"A": "my-app.internal",
+				},
 			},
 		},
 		{
@@ -168,9 +173,11 @@ func Test_convertSpecTests(t *testing.T) {
 				Containers: map[string]score.Container{"c": {Variables: map[string]string{"A": "${resources.d.host}"}}},
 				Resources:  map[string]score.Resource{"d": {Type: "dns", Class: ref("external")}},
 			},
-			output: flymachinesclient.ApiMachineConfig{
-				Image:     ref(""),
-				Processes: ref([]flymachinesclient.ApiMachineProcess{{Env: ref(map[string]string{"A": "my-app.fly.dev"})}}),
+			output: flytoml.Config{
+				Build: &flytoml.Build{Image: ""},
+				Env: map[string]string{
+					"A": "my-app.fly.dev",
+				},
 			},
 		},
 		{
@@ -189,9 +196,9 @@ func Test_convertSpecTests(t *testing.T) {
 					"score-flyio/volume_id": "vol_123456789",
 				}}}},
 			},
-			output: flymachinesclient.ApiMachineConfig{
-				Image:  ref(""),
-				Mounts: &[]flymachinesclient.ApiMachineMount{{Path: ref("/path"), Volume: ref("vol_123456789")}},
+			output: flytoml.Config{
+				Build:  &flytoml.Build{Image: ""},
+				Mounts: []flytoml.Mount{{Destination: "/path", Source: "vol_123456789"}},
 			},
 		},
 		{
@@ -207,9 +214,7 @@ func Test_convertSpecTests(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			o, err := convertScoreIntoMachine("my-app", &tc.input, flygraphqlclient.GetAppExtrasApp{
-				Hostname: "my-app.fly.dev",
-			})
+			o, err := ConvertScoreToFlyConfig("my-app", &tc.input)
 			if tc.error != "" {
 				if err == nil {
 					t.Errorf("no error, expected '%s'", tc.error)
@@ -219,10 +224,12 @@ func Test_convertSpecTests(t *testing.T) {
 			} else {
 				if err != nil {
 					t.Errorf("expected no error, got '%s'", err.Error())
-				} else if !reflect.DeepEqual(tc.output, o) {
+				} else {
 					expected, _ := json.MarshalIndent(tc.output, "", "  ")
 					actual, _ := json.MarshalIndent(o, "", "  ")
-					t.Errorf("expected:\n%s\n, got:\n %s", string(expected), string(actual))
+					if string(expected) != string(actual) {
+						t.Errorf("expected:\n%s\n, got:\n %s", string(expected), string(actual))
+					}
 				}
 			}
 		})

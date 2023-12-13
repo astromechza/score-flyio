@@ -42,9 +42,9 @@ type Deploy struct {
 
 type File struct {
 	GuestPath  string   `toml:"guest_path" json:"guest_path,omitempty" validate:"required"`
-	LocalPath  string   `toml:"local_path" json:"local_path,omitempty"`
-	SecretName string   `toml:"secret_name" json:"secret_name,omitempty"`
-	RawValue   string   `toml:"raw_value" json:"raw_value,omitempty"`
+	LocalPath  string   `toml:"local_path,omitempty" json:"local_path,omitempty"`
+	SecretName string   `toml:"secret_name,omitempty" json:"secret_name,omitempty"`
+	RawValue   string   `toml:"raw_value,omitempty" json:"raw_value,omitempty"`
 	Processes  []string `json:"processes,omitempty" toml:"processes,omitempty"`
 }
 
