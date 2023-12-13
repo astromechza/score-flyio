@@ -10,15 +10,13 @@ This CLI will transform a Score specification into a Fly.io App which can be dep
 
 ## Usage
 
-Install (Pre-built binaries will be available soon):
+Installation options:
+
+1. Curl and shell: `curl https://raw.githubusercontent.com/astromechza/score-flyio/main/install.sh | sh`
+2. Go build the latest release locally: `go install github.com/astromechza/score-flyio@latest`
+3. Homebrew (TODO)
 
 ```
-$ go install github.com/astromechza/score-flyio@latest
-go: downloading github.com/astromechza/score-flyio v0.0.0-20231206214427-f5eb613bc02b
-
-$ which score-flyio
-/Users/bmeier/.gvm/pkgsets/go1.21.0/global/bin/score-flyio
-
 $ score-flyio --help
 Usage: score-flyio [global options...] <subcommand> ...
 
