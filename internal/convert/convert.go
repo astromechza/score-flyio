@@ -27,7 +27,7 @@ func ConvertScoreToFlyConfig(appName string, region string, spec *score.Workload
 	if v, ok := spec.Metadata["name"].(string); ok && output.AppName == "" && v != "" {
 		output.AppName = v
 	}
-	if r, ok := spec.Metadata[annotationNamespace+"physical_region"].(string); ok && output.PrimaryRegion == "" && r != "" {
+	if r, ok := spec.Metadata[annotationNamespace+"primary_region"].(string); ok && output.PrimaryRegion == "" && r != "" {
 		output.PrimaryRegion = r
 	}
 
