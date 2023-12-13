@@ -58,7 +58,7 @@ type Mount struct {
 	Destination             string   `toml:"destination,omitempty" json:"destination,omitempty"`
 	InitialSize             string   `toml:"initial_size,omitempty" json:"initial_size,omitempty"`
 	Processes               []string `toml:"processes,omitempty" json:"processes,omitempty"`
-	AutoExtendSizeThreshold int      `toml:"auto_extend_size_threshold,omitempty" json:"auto_extend_size_threshold,omitempty"`
+	AutoExtendSizeThreshold int      `toml:"auto_extend_size_threshold,omitempty,omitzero" json:"auto_extend_size_threshold,omitempty"`
 	AutoExtendSizeIncrement string   `toml:"auto_extend_size_increment,omitempty" json:"auto_extend_size_increment,omitempty"`
 	AutoExtendSizeLimit     string   `toml:"auto_extend_size_limit,omitempty" json:"auto_extend_size_limit,omitempty"`
 }
@@ -88,8 +88,8 @@ type Compute struct {
 	Size             string   `json:"size,omitempty" toml:"size,omitempty"`
 	Memory           string   `json:"memory,omitempty" toml:"memory,omitempty"`
 	CPUKind          string   `json:"cpu_kind,omitempty" toml:"cpu_kind,omitempty"`
-	CPUs             int      `json:"cpus,omitempty" toml:"cpus,omitempty"`
-	MemoryMB         int      `json:"memory_mb,omitempty" toml:"memory_mb,omitempty"`
+	CPUs             int      `json:"cpus,omitempty,omitzero" toml:"cpus,omitempty"`
+	MemoryMB         int      `json:"memory_mb,omitempty,omitzero" toml:"memory_mb,omitempty"`
 	GPUKind          string   `json:"gpu_kind,omitempty" toml:"gpu_kind,omitempty"`
 	HostDedicationID string   `json:"host_dedication_id,omitempty" toml:"host_dedication_id,omitempty"`
 	KernelArgs       []string `json:"kernel_args,omitempty" toml:"kernel_args,omitempty"`
@@ -103,7 +103,7 @@ type Service struct {
 	// already omits nil since it can't be represented, and omitempty makes it omit false as well.
 	AutoStopMachines   *bool                      `json:"auto_stop_machines,omitempty" toml:"auto_stop_machines"`
 	AutoStartMachines  *bool                      `json:"auto_start_machines,omitempty" toml:"auto_start_machines"`
-	MinMachinesRunning *int                       `json:"min_machines_running,omitempty" toml:"min_machines_running,omitempty"`
+	MinMachinesRunning *int                       `json:"min_machines_running,omitempty,omitzero" toml:"min_machines_running,omitempty"`
 	Ports              []MachinePort              `json:"ports,omitempty" toml:"ports"`
 	Concurrency        *MachineServiceConcurrency `json:"concurrency,omitempty" toml:"concurrency"`
 	TCPChecks          []*ServiceTCPCheck         `json:"tcp_checks,omitempty" toml:"tcp_checks,omitempty"`
@@ -132,7 +132,7 @@ type ServiceHTTPCheck struct {
 }
 
 type HTTPService struct {
-	InternalPort int  `json:"internal_port,omitempty" toml:"internal_port,omitempty" validate:"required,numeric"`
+	InternalPort int  `json:"internal_port,omitempty,omitzero" toml:"internal_port,omitempty" validate:"required,numeric"`
 	ForceHTTPS   bool `toml:"force_https,omitempty" json:"force_https,omitempty"`
 	// AutoStopMachines and AutoStartMachines should not have omitempty for TOML; see the note in Service.
 	AutoStopMachines   *bool                      `json:"auto_stop_machines,omitempty" toml:"auto_stop_machines"`
@@ -152,12 +152,12 @@ type Metrics struct {
 
 type MachineServiceConcurrency struct {
 	Type      string `json:"type,omitempty" toml:"type,omitempty"`
-	HardLimit int    `json:"hard_limit,omitempty" toml:"hard_limit,omitempty"`
-	SoftLimit int    `json:"soft_limit,omitempty" toml:"soft_limit,omitempty"`
+	HardLimit int    `json:"hard_limit,omitempty,omitzero" toml:"hard_limit,omitempty"`
+	SoftLimit int    `json:"soft_limit,omitempty,omitzero" toml:"soft_limit,omitempty"`
 }
 
 type MachineMetrics struct {
-	Port int    `toml:"port" json:"port,omitempty"`
+	Port int    `toml:"port" json:"port,omitempty,omitzero"`
 	Path string `toml:"path" json:"path,omitempty"`
 }
 

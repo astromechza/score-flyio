@@ -61,12 +61,12 @@ func ConvertScoreToFlyConfig(appName string, spec *score.WorkloadSpec) (*flytoml
 				return output, fmt.Errorf("resources: '%s': volume.'%s' class not supported", resourceName, *resource.Class)
 			}
 			if annotations, ok := resource.Metadata["annotations"].(score.ResourceMetadata); ok {
-				if volumeId, ok := annotations["score-flyio/volume_id"].(string); ok {
+				if volumeId, ok := annotations["score-flyio/volume_name"].(string); ok {
 					templateCtx.ResourceProperties[resourceName] = map[string]interface{}{"": volumeId}
 					break
 				}
 			}
-			return output, fmt.Errorf("resources: '%s': metadata.annotations.score-flyio/volume_id should be the Fly.io volume id", resourceName)
+			return output, fmt.Errorf("resources: '%s': metadata.annotations.score-flyio/volume_name should be the Fly.io volume id", resourceName)
 		case "":
 			return output, fmt.Errorf("resources: '%s': missing resource type", resourceName)
 		default:
