@@ -74,79 +74,159 @@ func ConvertScoreToFlyConfig(appName string, spec *score.WorkloadSpec) (*flytoml
 		}
 	}
 
+	output.AppName = appName
+	output.Processes = map[string]string{}
+	output.Build = &flytoml.Build{}
+	output.Env = make(map[string]string)
+
 	if len(spec.Containers) != 1 {
 		return output, fmt.Errorf("score spec contains more than 1 container")
 	}
-	var containerName string
-	var container score.Container
-	for containerName, container = range spec.Containers {
-		break
-	}
-	output.Build = &flytoml.Build{Image: container.Image}
-	output.Processes = map[string]string{}
 
-	argString := make([]string, 0)
-	argString = append(argString, container.Command...)
-	argString = append(argString, container.Args...)
-	if len(argString) > 0 {
+	for containerName, container := range spec.Containers {
+		containerName := containerName
+		container := container
+
+		if output.Build.Image == "" {
+			output.Build.Image = container.Image
+		} else if output.Build.Image != container.Image {
+			return nil, fmt.Errorf("containers.%s.image: all processes must use the same container image", containerName)
+		}
+
+		if container.Variables != nil {
+			for k, v := range container.Variables {
+				if v2, err := templateCtx.Substitute(v); err != nil {
+					return output, fmt.Errorf("containers.%s.variables.%s: failed to interpolate: %w", containerName, k, err)
+				} else if v, ok := output.Env[k]; ok && v != v2 {
+					return output, fmt.Errorf("containers.%s.variables.%s: containers cannot have different values of the same variable", containerName, k)
+				} else {
+					output.Env[k] = v2
+				}
+			}
+		}
+
+		argString := make([]string, 0)
+		argString = append(argString, container.Command...)
+		argString = append(argString, container.Args...)
 		output.Processes[containerName] = shellescape.QuoteCommand(argString)
-	}
-	if container.Variables != nil {
-		outputEnv := make(map[string]string, len(container.Variables))
-		for k, v := range container.Variables {
-			if v2, err := templateCtx.Substitute(v); err != nil {
-				return output, fmt.Errorf("containers.%s.variables.%s: failed to interpolate: %w", containerName, k, err)
-			} else {
-				outputEnv[k] = v2
-			}
-		}
-		output.Env = outputEnv
-	}
 
-	if container.Resources != nil {
-		cpuReq := ""
-		if container.Resources.Limits != nil && container.Resources.Limits.Cpu != nil {
-			cpuReq = *container.Resources.Limits.Cpu
-		} else if container.Resources.Requests != nil && container.Resources.Requests.Cpu != nil {
-			cpuReq = *container.Resources.Requests.Cpu
-		}
-		memoryBytes := ""
-		if container.Resources.Limits != nil && container.Resources.Limits.Memory != nil {
-			memoryBytes = *container.Resources.Limits.Memory
-		} else if container.Resources.Requests != nil && container.Resources.Requests.Memory != nil {
-			memoryBytes = *container.Resources.Requests.Memory
-		}
-		if cpuReq != "" || memoryBytes != "" {
-			vm := flytoml.Compute{CPUKind: "shared"}
-			if cpuReq != "" {
-				if v, err := convertCpu(cpuReq); err != nil {
-					return output, fmt.Errorf("invalid container cpu resource '%s': %w", cpuReq, err)
-				} else {
-					vm.CPUs = v
-				}
+		if container.Resources != nil {
+			cpuReq := ""
+			if container.Resources.Limits != nil && container.Resources.Limits.Cpu != nil {
+				cpuReq = *container.Resources.Limits.Cpu
+			} else if container.Resources.Requests != nil && container.Resources.Requests.Cpu != nil {
+				cpuReq = *container.Resources.Requests.Cpu
 			}
-			if memoryBytes != "" {
-				if v, err := convertMemoryToMegabytes(memoryBytes); err != nil {
-					return output, fmt.Errorf("invalid container memory resource '%s': %w", memoryBytes, err)
-				} else {
-					vm.MemoryMB = v
-				}
+			memoryBytes := ""
+			if container.Resources.Limits != nil && container.Resources.Limits.Memory != nil {
+				memoryBytes = *container.Resources.Limits.Memory
+			} else if container.Resources.Requests != nil && container.Resources.Requests.Memory != nil {
+				memoryBytes = *container.Resources.Requests.Memory
 			}
-			output.Compute = []*flytoml.Compute{&vm}
+			if cpuReq != "" || memoryBytes != "" {
+				vm := flytoml.Compute{CPUKind: "shared", Processes: []string{containerName}}
+				if cpuReq != "" {
+					if v, err := convertCpu(cpuReq); err != nil {
+						return output, fmt.Errorf("invalid container cpu resource '%s': %w", cpuReq, err)
+					} else {
+						vm.CPUs = v
+					}
+				}
+				if memoryBytes != "" {
+					if v, err := convertMemoryToMegabytes(memoryBytes); err != nil {
+						return output, fmt.Errorf("invalid container memory resource '%s': %w", memoryBytes, err)
+					} else {
+						vm.MemoryMB = v
+					}
+				}
+				if output.Compute == nil {
+					output.Compute = make([]*flytoml.Compute, 0)
+				}
+				output.Compute = append(output.Compute, &vm)
+			}
 		}
-	}
 
-	if container.LivenessProbe != nil && container.LivenessProbe.HttpGet != nil {
-		if output.Checks == nil {
-			output.Checks = map[string]*flytoml.ToplevelCheck{}
+		if container.LivenessProbe != nil && container.LivenessProbe.HttpGet != nil {
+			if output.Checks == nil {
+				output.Checks = map[string]*flytoml.ToplevelCheck{}
+			}
+			checkName := fmt.Sprintf("%s-%s", containerName, "liveness")
+			output.Checks[checkName] = ref(convertProbeToCheck(container.LivenessProbe.HttpGet))
+			output.Checks[checkName].Processes = []string{containerName}
 		}
-		output.Checks["liveness"] = ref(convertProbeToCheck(container.LivenessProbe.HttpGet))
-	}
-	if container.ReadinessProbe != nil && container.ReadinessProbe.HttpGet != nil {
-		if output.Checks == nil {
-			output.Checks = map[string]*flytoml.ToplevelCheck{}
+		if container.ReadinessProbe != nil && container.ReadinessProbe.HttpGet != nil {
+			if output.Checks == nil {
+				output.Checks = map[string]*flytoml.ToplevelCheck{}
+			}
+			checkName := fmt.Sprintf("%s-%s", containerName, "readiness")
+			output.Checks[checkName] = ref(convertProbeToCheck(container.ReadinessProbe.HttpGet))
+			output.Checks[checkName].Processes = []string{containerName}
 		}
-		output.Checks["readiness"] = ref(convertProbeToCheck(container.ReadinessProbe.HttpGet))
+
+		if len(container.Volumes) > 0 {
+			if len(container.Volumes) > 1 {
+				return output, fmt.Errorf("containers.%s.volumes: Fly.io only supports 1 volume per machine", containerName)
+			}
+			if output.Mounts == nil {
+				output.Mounts = make([]flytoml.Mount, 0)
+			}
+			for i, volume := range container.Volumes {
+				if volume.ReadOnly != nil && *volume.ReadOnly == true {
+					return output, fmt.Errorf("containers.%s.volumes[%d]: read only not supported", containerName, i)
+				}
+				if volume.Path != nil && *volume.Path != "/" {
+					return output, fmt.Errorf("containers.%s.volumes[%d]: subpath not supported", containerName, i)
+				}
+				volumeId, err := templateCtx.Substitute(volume.Source)
+				if err != nil {
+					return output, fmt.Errorf("containers.%s.volumes[%d].source: failed to substitue: %w", containerName, i, err)
+				}
+				output.Mounts = append(output.Mounts, flytoml.Mount{
+					Source:      volumeId,
+					Destination: volume.Target,
+					Processes:   []string{containerName},
+				})
+			}
+			if output.Mounts == nil {
+				output.Mounts = make([]flytoml.Mount, 0)
+			}
+		}
+
+		if len(container.Files) > 0 {
+			if output.Files == nil {
+				output.Files = make([]flytoml.File, 0)
+			}
+			for i, containerFile := range container.Files {
+				if containerFile.Mode != nil {
+					return output, fmt.Errorf("containers.%s.files[%d]]: mode is not supported", containerName, i)
+				}
+				var rawContent string
+				if v, ok := containerFile.Content.(string); ok && v != "" {
+					rawContent = v
+				} else if containerFile.Source != nil {
+					if rawData, err := os.ReadFile(*containerFile.Source); err != nil {
+						return output, fmt.Errorf("containers.%s.files[%d]: failed to read source: %w", containerName, i, err)
+					} else {
+						rawContent = string(rawData)
+					}
+				} else {
+					return output, fmt.Errorf("containers.%s.files[%d]: is missing source or content", containerName, i)
+				}
+				if containerFile.NoExpand == nil || !*containerFile.NoExpand {
+					if substituted, err := templateCtx.Substitute(rawContent); err != nil {
+						return output, fmt.Errorf("containers.%s.files[%d]: failed to substitute content: %w", containerName, i, err)
+					} else {
+						rawContent = substituted
+					}
+				}
+				rawContent = base64.StdEncoding.EncodeToString([]byte(rawContent))
+				output.Files = append(output.Files, flytoml.File{
+					GuestPath: containerFile.Target,
+					RawValue:  rawContent,
+					Processes: []string{containerName},
+				})
+			}
+		}
 	}
 
 	if spec.Service != nil && len(spec.Service.Ports) > 0 {
@@ -167,9 +247,15 @@ func ConvertScoreToFlyConfig(appName string, spec *score.WorkloadSpec) (*flytoml
 					internalPort = targetPort
 				}
 			}
+			var process string
+			for p := range output.Processes {
+				process = p
+				break
+			}
 			flyServices = append(flyServices, flytoml.Service{
 				Protocol:     protocol,
 				InternalPort: portSpec.Port,
+				Processes:    []string{process},
 				Ports: []flytoml.MachinePort{
 					{
 						Port:     ref(portSpec.Port),
@@ -179,64 +265,6 @@ func ConvertScoreToFlyConfig(appName string, spec *score.WorkloadSpec) (*flytoml
 			})
 		}
 		output.Services = flyServices
-	}
-
-	if len(container.Files) > 0 {
-		outputFiles := make([]flytoml.File, 0)
-		for i, containerFile := range container.Files {
-			if containerFile.Mode != nil {
-				return output, fmt.Errorf("containers.%s.files[%d]]: mode is not supported", containerName, i)
-			}
-			var rawContent string
-			if v, ok := containerFile.Content.(string); ok && v != "" {
-				rawContent = v
-			} else if containerFile.Source != nil {
-				if rawData, err := os.ReadFile(*containerFile.Source); err != nil {
-					return output, fmt.Errorf("containers.%s.files[%d]: failed to read source: %w", containerName, i, err)
-				} else {
-					rawContent = string(rawData)
-				}
-			} else {
-				return output, fmt.Errorf("containers.%s.files[%d]: is missing source or content", containerName, i)
-			}
-			if containerFile.NoExpand == nil || !*containerFile.NoExpand {
-				if substituted, err := templateCtx.Substitute(rawContent); err != nil {
-					return output, fmt.Errorf("containers.%s.files[%d]: failed to substitute content: %w", containerName, i, err)
-				} else {
-					rawContent = substituted
-				}
-			}
-			rawContent = base64.StdEncoding.EncodeToString([]byte(rawContent))
-			outputFiles = append(outputFiles, flytoml.File{
-				GuestPath: containerFile.Target,
-				RawValue:  rawContent,
-			})
-		}
-		output.Files = outputFiles
-	}
-
-	if len(container.Volumes) > 0 {
-		if len(container.Volumes) > 1 {
-			return output, fmt.Errorf("containers.%s.volumes: Fly.io only supports 1 volume per machine", containerName)
-		}
-		mounts := make([]flytoml.Mount, 0)
-		for i, volume := range container.Volumes {
-			if volume.ReadOnly != nil && *volume.ReadOnly == true {
-				return output, fmt.Errorf("containers.%s.volumes[%d]: read only not supported", containerName, i)
-			}
-			if volume.Path != nil && *volume.Path != "/" {
-				return output, fmt.Errorf("containers.%s.volumes[%d]: subpath not supported", containerName, i)
-			}
-			volumeId, err := templateCtx.Substitute(volume.Source)
-			if err != nil {
-				return output, fmt.Errorf("containers.%s.volumes[%d].source: failed to substitue: %w", containerName, i, err)
-			}
-			mounts = append(mounts, flytoml.Mount{
-				Source:      volumeId,
-				Destination: volume.Target,
-			})
-		}
-		output.Mounts = mounts
 	}
 
 	return output, nil

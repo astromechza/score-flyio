@@ -108,11 +108,13 @@ func Test_convertSpecTests(t *testing.T) {
 				},
 			},
 			output: flytoml.Config{
-				Build: &flytoml.Build{Image: "my-image"},
+				AppName: "my-app",
+				Build:   &flytoml.Build{Image: "my-image"},
 				Env: map[string]string{
 					"A": "B", "B": "$C", "C": "42",
 				},
-				Files: []flytoml.File{{GuestPath: "/path", RawValue: base64.StdEncoding.EncodeToString([]byte("hello 42"))}},
+				Processes: map[string]string{"c": ""},
+				Files:     []flytoml.File{{Processes: []string{"c"}, GuestPath: "/path", RawValue: base64.StdEncoding.EncodeToString([]byte("hello 42"))}},
 			},
 		},
 		{
@@ -132,10 +134,12 @@ func Test_convertSpecTests(t *testing.T) {
 				Resources:  map[string]score.Resource{"env": {Type: "environment"}},
 			},
 			output: flytoml.Config{
-				Build: &flytoml.Build{Image: ""},
+				AppName: "my-app",
+				Build:   &flytoml.Build{Image: ""},
 				Env: map[string]string{
 					"A": "SOME_VALUE",
 				},
+				Processes: map[string]string{"c": ""},
 			},
 		},
 		{
@@ -161,10 +165,12 @@ func Test_convertSpecTests(t *testing.T) {
 				Resources:  map[string]score.Resource{"d": {Type: "dns"}},
 			},
 			output: flytoml.Config{
-				Build: &flytoml.Build{Image: ""},
+				AppName: "my-app",
+				Build:   &flytoml.Build{Image: ""},
 				Env: map[string]string{
 					"A": "my-app.internal",
 				},
+				Processes: map[string]string{"c": ""},
 			},
 		},
 		{
@@ -174,10 +180,12 @@ func Test_convertSpecTests(t *testing.T) {
 				Resources:  map[string]score.Resource{"d": {Type: "dns", Class: ref("external")}},
 			},
 			output: flytoml.Config{
-				Build: &flytoml.Build{Image: ""},
+				AppName: "my-app",
+				Build:   &flytoml.Build{Image: ""},
 				Env: map[string]string{
 					"A": "my-app.fly.dev",
 				},
+				Processes: map[string]string{"c": ""},
 			},
 		},
 		{
@@ -193,12 +201,14 @@ func Test_convertSpecTests(t *testing.T) {
 			input: score.WorkloadSpec{
 				Containers: map[string]score.Container{"c": {Volumes: []score.ContainerVolumesElem{{Source: "${resources.v}", Target: "/path"}}}},
 				Resources: map[string]score.Resource{"v": {Type: "volume", Metadata: map[string]interface{}{"annotations": score.ResourceMetadata{
-					"score-flyio/volume_id": "vol_123456789",
+					"score-flyio/volume_name": "vol_123456789",
 				}}}},
 			},
 			output: flytoml.Config{
-				Build:  &flytoml.Build{Image: ""},
-				Mounts: []flytoml.Mount{{Destination: "/path", Source: "vol_123456789"}},
+				AppName:   "my-app",
+				Build:     &flytoml.Build{Image: ""},
+				Mounts:    []flytoml.Mount{{Destination: "/path", Source: "vol_123456789", Processes: []string{"c"}}},
+				Processes: map[string]string{"c": ""},
 			},
 		},
 		{

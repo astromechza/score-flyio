@@ -6,11 +6,11 @@ A [Score](https://docs.score.dev/docs/) transformer for [Fly.io](https://fly.io/
 
 Score is a platform-agnostic Workload specification to improve developer productivity and experience. Score allows you to specify the workload once and deploy the same specification to many platforms.
 
-This CLI will transform a Score specification into a Fly.io Machine and deploy it into an existing Fly.io app or create a new machine there if none exist. You should still use the `flyctl` tool to manage machine lifecycle and cloning, but `score-flyio` will ensure that the workload specifation is applied.
+This CLI will transform a Score specification into a Fly.io App which can be deployed.
 
 ## Usage
 
-The following command will validate and transform the Score file into a Fly.io Machine configuration and deploy or update it.
+Install (Pre-built binaries will be available soon):
 
 ```
 $ go install github.com/astromechza/score-flyio@latest
@@ -18,18 +18,25 @@ go: downloading github.com/astromechza/score-flyio v0.0.0-20231206214427-f5eb613
 
 $ which score-flyio
 /Users/bmeier/.gvm/pkgsets/go1.21.0/global/bin/score-flyio
-
-$ score-flyio run --app score-flyio-1234 examples/01-hello-world.score.yaml
 ```
 
-- Any Score services will be converted into Fly.io Machine services and exposed over the private network.
-- Live-ness and readiness probes will be converted into checks.
-- Files will be converted into Fly.io files.
+The `run` command will validate and transform the Score file into a Fly.io App Configuration (`fly.toml`) which can then be deployed.
+
+```
+FLY_APP_NAME=score-flyio-1234
+$ score-flyio run --app ${FLY_APP_NAME} examples/01-hello-world.score.yaml > fly.toml
+$ fly app create ${FLY_APP_NAME}
+$ fly deploy
+```
+
+Note that it still requires volumes to be created manually if required.
+
+| ⚠️ TODO: add a command that creates the app and/or required volumes from the resources.
 
 ## Supported Score Features
 
 - [X] `metadata`
-- ⚠️ `container` (**NOTE:** only 1 container can be specified)
+- ⚠️ `container` (**NOTE:** only 1 container can be specified at the moment)
   - [X] `image` (naturally)
   - [X] `command`
   - [X] `args`
@@ -41,7 +48,7 @@ $ score-flyio run --app score-flyio-1234 examples/01-hello-world.score.yaml
     - [X] `source`
     - [X] `noExpand`
   - 🗒️ `volumes`
-    - [X] `source` (this should be the volume id that exists, or comes from a resource)
+    - [X] `source` (this should be the volume name that exists, or comes from a resource)
     - [X] `target`
     - [ ] `path` (not supported)
     - [ ] `read_only` (not supported)
@@ -91,16 +98,10 @@ Extension file content:
   set: 443
 - path: services.0.ports.0.handlers
   set: ["tls", "http"]
-- path: processes.0.env
+- path: env.EXTERNAL_SCHEMA
   delete: true
 ```
 
-Extension command line to set a value: `--extension 'process.0.env={"key":"value"}'`.
+Extension command line to set a value: `--extension 'env={"key":"value"}'`.
 
-Extension command line to delete a value: `--extension 'process.0.env=`.
-
-## TODO:
-
-- Any container volumes will be converted into per-machine Fly.io volumes. Unless they are defined in the resources section as volumes when they will be provisioned as shared volumes.
-- A DNS resource will be converted into a Fly.io shared ipv4 address.
-- If a Postgres resource is added, and it has an annotation pointing to an existing Fly.io Postgres app within the same org, we will "attach" it to the Fly application via the DATABASE_URL environment variable.
+Extension command line to delete a value: `--extension 'env.key=`.
