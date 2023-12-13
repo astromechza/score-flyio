@@ -24,13 +24,17 @@ Usage: score-flyio [global options...] <subcommand> ...
 
 Available subcommands:
   run	Convert the input Score file into a Fly.io toml file.
-
+  
 Global options:
   -debug
     	Enable debug logging
 
 Use "score-flyio" <subcommand> --help for more information about a given subcommand.
+```
 
+The `run` command will validate and transform the Score file into a Fly.io App Configuration (`fly.toml`) which can then be deployed.
+
+```
 $ score-flyio run --help
 Usage: score-flyio [global options...] run [options...] <my-score-file.yaml>
 
@@ -47,8 +51,6 @@ Options:
     	The target Fly.io region name otherwise the region will be assigned when you deploy
 ```
 
-The `run` command will validate and transform the Score file into a Fly.io App Configuration (`fly.toml`) which can then be deployed.
-
 ```
 FLY_APP_NAME=score-flyio-1234
 $ score-flyio run --app ${FLY_APP_NAME} examples/01-hello-world.score.yaml > fly.toml
@@ -58,27 +60,25 @@ $ fly deploy
 
 Note that it still requires volumes to be created manually if required.
 
-| ⚠️ TODO: add a command that creates the app and/or required volumes from the resources.
-
 ## Supported Score Features
 
 - [X] `metadata`
-- ⚠️ `container` (**NOTE:** only 1 container can be specified at the moment)
-  - [X] `image` (naturally)
+- [X] `container`
+  - [X] `image` (**NOTE:** all containers must use the same image)
   - [X] `command`
   - [X] `args`
-  - [X] `variables`
+  - [X] `variables` (**NOTE:** environment variables will be merged and shared between containers)
   - 🗒️️ `files`
     - [X] `target`
-    - [ ] `mode` (not supported)
+    - [ ] `mode` (⚠️ not supported)
     - [X] `content`
     - [X] `source`
     - [X] `noExpand`
   - 🗒️ `volumes`
-    - [X] `source` (this should be the volume name that exists, or comes from a resource)
+    - [X] `source`
     - [X] `target`
-    - [ ] `path` (not supported)
-    - [ ] `read_only` (not supported)
+    - [ ] `path` (⚠️ not supported)
+    - [ ] `read_only` (⚠️ not supported)
   - 🗒️ `resources` (**NOTE:** uses `limits` and falls back to `requests`)
     - [X] `limits`
     - [X] `requests`
@@ -88,10 +88,13 @@ Note that it still requires volumes to be created manually if required.
   - [X] `metadata`
   - [X] `type`
   - [X] `class`
-- 🗒️ `service` - (**NOTE:**)
+- 🗒️ `service` (**NOTE**: if multiple containers are set, this will link to the first container)
   - [X] `port`
   - [X] `protocol`
   - [X] `targetPort`
+
+NOTE: that for any Fly.io features not directly supported by Score, you can use the `--extensions` to add in missing
+configuration.
 
 ### Supported Resource Types
 
@@ -100,8 +103,16 @@ The supported resource types are:
 - `environment` - For accessing local environment variables. Properties can be used for accessing environment variables like `${resources.env.SOME_KEY}`.
 - `dns` - For accessing a useful hostname of the deployment. The only available property is `host`, a hostname. The default class will return `<app>.internal`, while the `external` class will return the external hostname.
   - **NOTE:** The `external` class depends on a shared-ipv4 address being provisioned for the app.
-- `volume` - For accessing the volume id of an existing volume that's not attached or already attached to the current machine. It can be referenced via `${resources.vol-name}`.
-  - **NOTE:** At some point we'll work out how to provision the volume here if needed as well! (TODO).
+- `volume` - For specifying the Fly.io volume name via the `metadata.annotations.score-flyio/volume_name` annotation. It can be referenced via `${resources.vol-name}`.
+  
+  ```yaml
+  resources:
+    data-volume:
+      type: volume
+      metadata:
+        annotations:
+          score-flyio/volume_name: "my_data_volume"
+  ```
 
 ### Metadata Interpolation
 
