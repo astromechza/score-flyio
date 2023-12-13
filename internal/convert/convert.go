@@ -17,8 +17,19 @@ import (
 	"github.com/astromechza/score-flyio/score"
 )
 
-func ConvertScoreToFlyConfig(appName string, spec *score.WorkloadSpec) (*flytoml.Config, error) {
+const annotationNamespace = "score-flyio/"
+
+func ConvertScoreToFlyConfig(appName string, region string, spec *score.WorkloadSpec) (*flytoml.Config, error) {
 	output := &flytoml.Config{}
+
+	output.AppName = appName
+	output.PrimaryRegion = region
+	if v, ok := spec.Metadata["name"].(string); ok && output.AppName == "" && v != "" {
+		output.AppName = v
+	}
+	if r, ok := spec.Metadata[annotationNamespace+"physical_region"].(string); ok && output.PrimaryRegion == "" && r != "" {
+		output.PrimaryRegion = r
+	}
 
 	templateCtx := templating.Context{
 		Meta:               spec.Metadata,
@@ -45,43 +56,39 @@ func ConvertScoreToFlyConfig(appName string, spec *score.WorkloadSpec) (*flytoml
 			}
 			if resource.Class == nil || *resource.Class == "default" {
 				templateCtx.ResourceProperties[resourceName] = map[string]interface{}{
-					"host": fmt.Sprintf("%s.internal", appName),
+					"host": fmt.Sprintf("%s.internal", output.AppName),
 				}
 			} else if *resource.Class == "external" {
 				templateCtx.ResourceProperties[resourceName] = map[string]interface{}{
-					"host": fmt.Sprintf("%s.fly.dev", appName),
+					"host": fmt.Sprintf("%s.fly.dev", output.AppName),
 				}
 			} else {
-				return output, fmt.Errorf("resources: '%s': dns.'%s' class not supported", resourceName, *resource.Class)
+				return output, fmt.Errorf("resources.%s: dns.'%s' class not supported", resourceName, *resource.Class)
 			}
 		case "volume":
 			if len(resource.Params) > 0 {
 				return output, fmt.Errorf("resources: '%s': no params supported", resourceName)
 			} else if resource.Class != nil && *resource.Class != "default" {
-				return output, fmt.Errorf("resources: '%s': volume.'%s' class not supported", resourceName, *resource.Class)
+				return output, fmt.Errorf("resources.%s: volume.'%s' class not supported", resourceName, *resource.Class)
 			}
+			volNameAnnotation := annotationNamespace + "volume_name"
 			if annotations, ok := resource.Metadata["annotations"].(score.ResourceMetadata); ok {
-				if volumeId, ok := annotations["score-flyio/volume_name"].(string); ok {
+				if volumeId, ok := annotations[volNameAnnotation].(string); ok {
 					templateCtx.ResourceProperties[resourceName] = map[string]interface{}{"": volumeId}
 					break
 				}
 			}
-			return output, fmt.Errorf("resources: '%s': metadata.annotations.score-flyio/volume_name should be the Fly.io volume id", resourceName)
+			return output, fmt.Errorf("resources.%s.metadata.annotations.%s should be the Fly.io volume id", resourceName, volNameAnnotation)
 		case "":
-			return output, fmt.Errorf("resources: '%s': missing resource type", resourceName)
+			return output, fmt.Errorf("resources.%s.type: not specified", resourceName)
 		default:
-			return output, fmt.Errorf("resources: '%s': unsupported resource type '%s'", resourceName, resource.Type)
+			return output, fmt.Errorf("resources.%s: unsupported resource type '%s'", resourceName, resource.Type)
 		}
 	}
 
-	output.AppName = appName
 	output.Processes = map[string]string{}
 	output.Build = &flytoml.Build{}
 	output.Env = make(map[string]string)
-
-	if len(spec.Containers) != 1 {
-		return output, fmt.Errorf("score spec contains more than 1 container")
-	}
 
 	for containerName, container := range spec.Containers {
 		containerName := containerName

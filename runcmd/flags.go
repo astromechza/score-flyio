@@ -14,15 +14,19 @@ import (
 
 const (
 	FlagSubcommand = "run"
-	FlagHelpPrefix = `
+	FlagHelpPrefix = `Usage: score-flyio [global options...] run [options...] <my-score-file.yaml>
+
+The run subcommand converts the Score spec into a Fly.io app toml and outputs it on the standard output.
+
+Options:
 `
-	FlagHelpSuffix = ``
+	FlagHelpSuffix = `
+`
 )
 
 type Args struct {
-	Org              string
 	App              string
-	DryRun           bool
+	Region           string
 	ScoreFileContent []byte
 	Extensions       []Extension
 }
@@ -68,15 +72,14 @@ func ParseFlagArgs(parent *flag.FlagSet) (Args, error) {
 		_, _ = fmt.Fprintf(fs.Output(), FlagHelpSuffix)
 	}
 	receiver := &Args{Extensions: make([]Extension, 0)}
-	fs.BoolVar(&receiver.DryRun, "dry-run", false, "Validated inputs and remote state but don't change anything")
-	fs.StringVar(&receiver.Org, "org", "personal", "The target Fly.io organization")
 	fs.StringVar(&receiver.App, "app", "", "The target Fly.io app name otherwise the name of the Score workload will be used")
+	fs.StringVar(&receiver.Region, "region", "", "The target Fly.io region name otherwise the region will be assigned when you deploy")
 
 	extensionsReceiver := extensionsFlag{Extensions: make([]Extension, 0)}
-	fs.Var(&extensionsReceiver, "extension", "An extension in the outgoing Fly machine config to set, as json separated by a =")
+	fs.Var(&extensionsReceiver, "extension", "An extension in the generated TOML to apply, as json separated by a =")
 
 	var extensionsFile string
-	fs.StringVar(&extensionsFile, "extensions", "", "A file containing a list of extensions {path: string, set: any, delete: bool}")
+	fs.StringVar(&extensionsFile, "extensions", "", "A YAML file containing a list of extensions to apply to the generated TOML [{\"path\": string, \"set\": any, \"delete\": bool}]")
 
 	if err := fs.Parse(parent.Args()[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
