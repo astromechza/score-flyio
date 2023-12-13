@@ -15,5 +15,5 @@ resources:
   vol:
     metadata:
       annotations:
-        score-flyio/volume_name: my-volume
+        score-flyio/volume_name: my_volume
     type: volume

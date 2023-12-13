@@ -18,6 +18,33 @@ go: downloading github.com/astromechza/score-flyio v0.0.0-20231206214427-f5eb613
 
 $ which score-flyio
 /Users/bmeier/.gvm/pkgsets/go1.21.0/global/bin/score-flyio
+
+$ score-flyio --help
+Usage: score-flyio [global options...] <subcommand> ...
+
+Available subcommands:
+  run	Convert the input Score file into a Fly.io toml file.
+
+Global options:
+  -debug
+    	Enable debug logging
+
+Use "score-flyio" <subcommand> --help for more information about a given subcommand.
+
+$ score-flyio run --help
+Usage: score-flyio [global options...] run [options...] <my-score-file.yaml>
+
+The run subcommand converts the Score spec into a Fly.io app toml and outputs it on the standard output.
+
+Options:
+  -app string
+    	The target Fly.io app name otherwise the name of the Score workload will be used
+  -extension value
+    	An extension in the generated TOML to apply, as json separated by a =
+  -extensions string
+    	A YAML file containing a list of extensions to apply to the generated TOML [{"path": string, "set": any, "delete": bool}]
+  -region string
+    	The target Fly.io region name otherwise the region will be assigned when you deploy
 ```
 
 The `run` command will validate and transform the Score file into a Fly.io App Configuration (`fly.toml`) which can then be deployed.
@@ -61,7 +88,7 @@ Note that it still requires volumes to be created manually if required.
   - [X] `metadata`
   - [X] `type`
   - [X] `class`
-- 🗒️ `service`
+- 🗒️ `service` - (**NOTE:**)
   - [X] `port`
   - [X] `protocol`
   - [X] `targetPort`

@@ -108,8 +108,9 @@ func Test_convertSpecTests(t *testing.T) {
 				},
 			},
 			output: flytoml.Config{
-				AppName: "my-app",
-				Build:   &flytoml.Build{Image: "my-image"},
+				AppName:       "my-app",
+				PrimaryRegion: "lhr",
+				Build:         &flytoml.Build{Image: "my-image"},
 				Env: map[string]string{
 					"A": "B", "B": "$C", "C": "42",
 				},
@@ -134,8 +135,9 @@ func Test_convertSpecTests(t *testing.T) {
 				Resources:  map[string]score.Resource{"env": {Type: "environment"}},
 			},
 			output: flytoml.Config{
-				AppName: "my-app",
-				Build:   &flytoml.Build{Image: ""},
+				AppName:       "my-app",
+				PrimaryRegion: "lhr",
+				Build:         &flytoml.Build{Image: ""},
 				Env: map[string]string{
 					"A": "SOME_VALUE",
 				},
@@ -165,8 +167,9 @@ func Test_convertSpecTests(t *testing.T) {
 				Resources:  map[string]score.Resource{"d": {Type: "dns"}},
 			},
 			output: flytoml.Config{
-				AppName: "my-app",
-				Build:   &flytoml.Build{Image: ""},
+				AppName:       "my-app",
+				PrimaryRegion: "lhr",
+				Build:         &flytoml.Build{Image: ""},
 				Env: map[string]string{
 					"A": "my-app.internal",
 				},
@@ -180,8 +183,9 @@ func Test_convertSpecTests(t *testing.T) {
 				Resources:  map[string]score.Resource{"d": {Type: "dns", Class: ref("external")}},
 			},
 			output: flytoml.Config{
-				AppName: "my-app",
-				Build:   &flytoml.Build{Image: ""},
+				AppName:       "my-app",
+				PrimaryRegion: "lhr",
+				Build:         &flytoml.Build{Image: ""},
 				Env: map[string]string{
 					"A": "my-app.fly.dev",
 				},
@@ -194,7 +198,7 @@ func Test_convertSpecTests(t *testing.T) {
 				Containers: map[string]score.Container{"c": {Variables: map[string]string{"A": "${resources.d.host}"}}},
 				Resources:  map[string]score.Resource{"d": {Type: "dns", Class: ref("unknown")}},
 			},
-			error: "resources: 'd': dns.'unknown' class not supported",
+			error: "resources.d: dns.'unknown' class not supported",
 		},
 		{
 			name: "existing volume id",
@@ -205,10 +209,11 @@ func Test_convertSpecTests(t *testing.T) {
 				}}}},
 			},
 			output: flytoml.Config{
-				AppName:   "my-app",
-				Build:     &flytoml.Build{Image: ""},
-				Mounts:    []flytoml.Mount{{Destination: "/path", Source: "vol_123456789", Processes: []string{"c"}}},
-				Processes: map[string]string{"c": ""},
+				AppName:       "my-app",
+				PrimaryRegion: "lhr",
+				Build:         &flytoml.Build{Image: ""},
+				Mounts:        []flytoml.Mount{{Destination: "/path", Source: "vol_123456789", Processes: []string{"c"}}},
+				Processes:     map[string]string{"c": ""},
 			},
 		},
 		{
@@ -224,7 +229,7 @@ func Test_convertSpecTests(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			o, err := ConvertScoreToFlyConfig("my-app", &tc.input)
+			o, err := ConvertScoreToFlyConfig("my-app", "lhr", &tc.input)
 			if tc.error != "" {
 				if err == nil {
 					t.Errorf("no error, expected '%s'", tc.error)

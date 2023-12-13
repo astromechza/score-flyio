@@ -22,7 +22,7 @@ func Run(args Args) error {
 		return fmt.Errorf("score spec was not valid: %w", err)
 	}
 	slog.Info("Score input is valid.")
-	cfg, err := convert.ConvertScoreToFlyConfig(args.App, scoreSpec)
+	cfg, err := convert.ConvertScoreToFlyConfig(args.App, args.Region, scoreSpec)
 	if err != nil {
 		return fmt.Errorf("failed to convert: %w", err)
 	}
@@ -42,6 +42,7 @@ func Run(args Args) error {
 		}
 	}
 
+	slog.Info("Writing toml..")
 	if err := toml.NewEncoder(os.Stdout).Encode(cfg); err != nil {
 		return fmt.Errorf("failed to encode: %w", err)
 	}

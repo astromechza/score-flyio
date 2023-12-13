@@ -14,9 +14,16 @@ import (
 )
 
 const (
-	FlagHelpPrefix = `
+	FlagHelpPrefix = `Usage: score-flyio [global options...] <subcommand> ...
+
+Available subcommands:
+  run	Convert the input Score file into a Fly.io toml file.
+
+Global options:
 `
-	FlagHelpSuffix = ``
+	FlagHelpSuffix = `
+Use "score-flyio" <subcommand> --help for more information about a given subcommand.
+`
 )
 
 func main() {
