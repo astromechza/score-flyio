@@ -1,8 +1,10 @@
 # score-flyio
 
-| ⚠️ This project is still being developed! Track the development here.
+![GitHub release (with filter)](https://img.shields.io/github/v/release/astromechza/score-flyio)
+![GitHub go.mod Go version (subdirectory of monorepo)](https://img.shields.io/github/go-mod/go-version/astromechza/score-flyio)
+![GitHub License](https://img.shields.io/github/license/astromechza/score-flyio)
 
-A [Score](https://docs.score.dev/docs/) transformer for [Fly.io](https://fly.io/). Convert your Score application files into Fly.io machines!
+A [Score](https://docs.score.dev/docs/) v1b1 transformer for [Fly.io](https://fly.io/). Convert your Score application files into Fly.io apps!
 
 Score is a platform-agnostic Workload specification to improve developer productivity and experience. Score allows you to specify the workload once and deploy the same specification to many platforms.
 
@@ -15,6 +17,8 @@ Installation options:
 1. Curl and shell: `curl https://raw.githubusercontent.com/astromechza/score-flyio/main/install.sh | sh`
 2. Go build the latest release locally: `go install github.com/astromechza/score-flyio@latest`
 3. Homebrew (TODO)
+
+![Gif showing the curl-sh installation method](install.gif)
 
 ```
 $ score-flyio --help
@@ -55,6 +59,8 @@ $ score-flyio run --app ${FLY_APP_NAME} examples/01-hello-world.score.yaml > fly
 $ fly app create ${FLY_APP_NAME}
 $ fly deploy
 ```
+
+![Gif showing a sample run](run.gif)
 
 Note that it still requires volumes to be created manually if required.
 
