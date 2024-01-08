@@ -79,7 +79,7 @@ func (ctx *Context) mapVar(ref string) (string, error) {
 			} else if len(segments) == 3 {
 				property, ok := resource[segments[2]]
 				if !ok {
-					return "", fmt.Errorf("property %s not set on resource type", segments[2])
+					return "", fmt.Errorf("property '%s' not set on resource %s", segments[2], segments[1])
 				}
 				return fmt.Sprint(property), nil
 			}

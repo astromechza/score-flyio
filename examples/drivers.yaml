@@ -1,0 +1,12 @@
+- type: postgres
+  class: default
+  uri: echo://driver-inputs
+  driver_inputs:
+    username: root
+    password: root
+    host: localhost
+    port: 5432
+    name: example
+- type: example
+  class: scripted
+  uri: 'file://examples/script-driver.sh'
