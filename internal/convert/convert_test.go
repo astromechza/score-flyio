@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/astromechza/score-flyio/flytoml"
+	"github.com/astromechza/score-flyio/internal/drivers"
 	"github.com/astromechza/score-flyio/score"
 )
 
@@ -158,7 +159,7 @@ func Test_convertSpecTests(t *testing.T) {
 				Containers: map[string]score.Container{"c": {Variables: map[string]string{"A": "${resources.env.SCOREFLYIORANDOMKEY}"}}},
 				Resources:  map[string]score.Resource{"env": {Type: "environment", Class: ref("unknown")}},
 			},
-			error: "resources: 'env': environment.'unknown' class not supported",
+			error: "resources: 'env': failed to find a driver supporting environment.unknown#env",
 		},
 		{
 			name: "default dns resource",
@@ -198,23 +199,7 @@ func Test_convertSpecTests(t *testing.T) {
 				Containers: map[string]score.Container{"c": {Variables: map[string]string{"A": "${resources.d.host}"}}},
 				Resources:  map[string]score.Resource{"d": {Type: "dns", Class: ref("unknown")}},
 			},
-			error: "resources.d: dns.'unknown' class not supported",
-		},
-		{
-			name: "existing volume id",
-			input: score.WorkloadSpec{
-				Containers: map[string]score.Container{"c": {Volumes: []score.ContainerVolumesElem{{Source: "${resources.v}", Target: "/path"}}}},
-				Resources: map[string]score.Resource{"v": {Type: "volume", Metadata: map[string]interface{}{"annotations": score.ResourceMetadata{
-					"score-flyio/volume_name": "vol_123456789",
-				}}}},
-			},
-			output: flytoml.Config{
-				AppName:       "my-app",
-				PrimaryRegion: "lhr",
-				Build:         &flytoml.Build{Image: ""},
-				Mounts:        []flytoml.Mount{{Destination: "/path", Source: "vol_123456789", Processes: []string{"c"}}},
-				Processes:     map[string]string{"c": ""},
-			},
+			error: "resources: 'd': failed to find a driver supporting dns.unknown#d",
 		},
 		{
 			name: "service without port",
@@ -229,7 +214,8 @@ func Test_convertSpecTests(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			o, err := ConvertScoreToFlyConfig("my-app", "lhr", &tc.input)
+			defaultDrivers, _, _ := drivers.GenerateDefaultDrivers("my-app")
+			o, err := ConvertScoreToFlyConfig("my-app", "lhr", &tc.input, defaultDrivers)
 			if tc.error != "" {
 				if err == nil {
 					t.Errorf("no error, expected '%s'", tc.error)

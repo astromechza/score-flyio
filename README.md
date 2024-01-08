@@ -55,8 +55,8 @@ Options:
 
 ```
 FLY_APP_NAME=score-flyio-1234
-$ score-flyio run --app ${FLY_APP_NAME} examples/01-hello-world.score.yaml > fly.toml
 $ fly app create ${FLY_APP_NAME}
+$ score-flyio run --app ${FLY_APP_NAME} examples/01-hello-world.score.yaml > fly.toml
 $ fly deploy
 ```
 

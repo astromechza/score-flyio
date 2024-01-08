@@ -1,0 +1,20 @@
+apiVersion: score.dev/v1b1
+
+metadata:
+  name: score-flyio-with-drivers
+
+containers:
+  hello:
+    image: busybox
+    command: ["/bin/sh", "-c", "while true; do echo Hello ${NAME}!; sleep 5; done"]
+    variables:
+      NAME: World
+      PG_STRING: postgres://${resources.example-db.username}:${resources.example-db.password}@${resources.example-db.host}:${resources.example-db.port}/${resources.example-db.name}
+      THING: "${resources.example-scripted.example_key}"
+
+resources:
+  example-db:
+    type: postgres
+  example-scripted:
+    type: example
+    class: scripted

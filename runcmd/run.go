@@ -11,6 +11,7 @@ import (
 
 	"github.com/astromechza/score-flyio/flytoml"
 	"github.com/astromechza/score-flyio/internal/convert"
+	drivers2 "github.com/astromechza/score-flyio/internal/drivers"
 	"github.com/astromechza/score-flyio/score"
 )
 
@@ -21,8 +22,21 @@ func Run(args Args) error {
 	if err != nil {
 		return fmt.Errorf("score spec was not valid: %w", err)
 	}
+
+	drivers, err := drivers2.DiscoverAndValidateDrivers()
+	if err != nil {
+		return fmt.Errorf("failed to load drivers: %w", err)
+	}
+	defaultDrivers, closer, err := drivers2.GenerateDefaultDrivers(args.App)
+	if err != nil {
+		return fmt.Errorf("failed to generate default drivers: %w", err)
+	}
+	defer closer()
+	drivers = append(drivers, defaultDrivers...)
+	slog.Info(fmt.Sprintf("Found %d resource drivers.", len(drivers)))
+
 	slog.Info("Score input is valid.")
-	cfg, err := convert.ConvertScoreToFlyConfig(args.App, args.Region, scoreSpec)
+	cfg, err := convert.ConvertScoreToFlyConfig(args.App, args.Region, scoreSpec, drivers)
 	if err != nil {
 		return fmt.Errorf("failed to convert: %w", err)
 	}

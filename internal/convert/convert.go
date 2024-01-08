@@ -1,25 +1,26 @@
 package convert
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"math"
 	"os"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/alessio/shellescape"
 
 	"github.com/astromechza/score-flyio/flytoml"
+	drivers2 "github.com/astromechza/score-flyio/internal/drivers"
 	"github.com/astromechza/score-flyio/internal/templating"
 	"github.com/astromechza/score-flyio/score"
 )
 
 const annotationNamespace = "score-flyio/"
 
-func ConvertScoreToFlyConfig(appName string, region string, spec *score.WorkloadSpec) (*flytoml.Config, error) {
+func ConvertScoreToFlyConfig(appName string, region string, spec *score.WorkloadSpec, drivers []drivers2.Driver) (*flytoml.Config, error) {
 	output := &flytoml.Config{}
 
 	output.AppName = appName
@@ -36,54 +37,32 @@ func ConvertScoreToFlyConfig(appName string, region string, spec *score.Workload
 		ResourceProperties: map[string]map[string]interface{}{},
 	}
 	for resourceName, resource := range spec.Resources {
-		switch resource.Type {
-		case "environment":
-			if len(resource.Params) > 0 {
-				return output, fmt.Errorf("resources: '%s': no params supported", resourceName)
-			} else if resource.Class != nil && *resource.Class != "default" {
-				return output, fmt.Errorf("resources: '%s': environment.'%s' class not supported", resourceName, *resource.Class)
-			}
-			// TODO: should we require this to come from an env file
-			currentEnvironment := map[string]interface{}{}
-			for _, s := range os.Environ() {
-				parts := strings.SplitN(s, "=", 2)
-				currentEnvironment[parts[0]] = parts[1]
-			}
-			templateCtx.ResourceProperties[resourceName] = currentEnvironment
-		case "dns":
-			if len(resource.Params) > 0 {
-				return output, fmt.Errorf("resources: '%s': no params supported", resourceName)
-			}
-			if resource.Class == nil || *resource.Class == "default" {
-				templateCtx.ResourceProperties[resourceName] = map[string]interface{}{
-					"host": fmt.Sprintf("%s.internal", output.AppName),
-				}
-			} else if *resource.Class == "external" {
-				templateCtx.ResourceProperties[resourceName] = map[string]interface{}{
-					"host": fmt.Sprintf("%s.fly.dev", output.AppName),
-				}
-			} else {
-				return output, fmt.Errorf("resources.%s: dns.'%s' class not supported", resourceName, *resource.Class)
-			}
-		case "volume":
-			if len(resource.Params) > 0 {
-				return output, fmt.Errorf("resources: '%s': no params supported", resourceName)
-			} else if resource.Class != nil && *resource.Class != "default" {
-				return output, fmt.Errorf("resources.%s: volume.'%s' class not supported", resourceName, *resource.Class)
-			}
-			volNameAnnotation := annotationNamespace + "volume_name"
-			if annotations, ok := resource.Metadata["annotations"].(score.ResourceMetadata); ok {
-				if volumeId, ok := annotations[volNameAnnotation].(string); ok {
-					templateCtx.ResourceProperties[resourceName] = map[string]interface{}{"": volumeId}
-					break
-				}
-			}
-			return output, fmt.Errorf("resources.%s.metadata.annotations.%s should be the Fly.io volume id", resourceName, volNameAnnotation)
-		case "":
-			return output, fmt.Errorf("resources.%s.type: not specified", resourceName)
-		default:
-			return output, fmt.Errorf("resources.%s: unsupported resource type '%s'", resourceName, resource.Type)
+		if resource.Class == nil {
+			resource.Class = ref("default")
 		}
+		resourceId := resourceName
+		if annotations, ok := resource.Metadata["annotations"].(score.ResourceMetadata); ok {
+			if r, ok := annotations[annotationNamespace+"resId"].(string); ok {
+				resourceId = r
+				break
+			}
+		}
+
+		var driver drivers2.Driver
+		for _, d := range drivers {
+			if d.Type == resource.Type && d.Class == *resource.Class && (d.ResourceId == nil || (*d.ResourceId == resourceId)) {
+				driver = d
+				break
+			}
+		}
+		if driver.Type == "" {
+			return nil, fmt.Errorf("resources: '%s': failed to find a driver supporting %s.%s#%s", resourceName, resource.Type, *resource.Class, resourceId)
+		}
+		outputs, err := driver.Provision(context.Background(), resourceId, resource)
+		if err != nil {
+			return nil, fmt.Errorf("resources: '%s': failed to provision resource '%s.%s#%s': %w", resourceName, resource.Type, *resource.Class, resourceId, err)
+		}
+		templateCtx.ResourceProperties[resourceName] = outputs
 	}
 
 	output.Processes = map[string]string{}
