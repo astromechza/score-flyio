@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/score-spec/score-implementation-sample/internal/command"
+	"github.com/astromechza/score-flyio/internal/command"
 )
 
 func main() {
