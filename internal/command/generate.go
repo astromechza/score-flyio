@@ -30,9 +30,9 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/score-spec/score-implementation-sample/internal/convert"
-	"github.com/score-spec/score-implementation-sample/internal/provisioners"
-	"github.com/score-spec/score-implementation-sample/internal/state"
+	"github.com/astromechza/score-flyio/internal/convert"
+	"github.com/astromechza/score-flyio/internal/provisioners"
+	"github.com/astromechza/score-flyio/internal/state"
 )
 
 const (

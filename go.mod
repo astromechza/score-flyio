@@ -1,4 +1,4 @@
-module github.com/score-spec/score-implementation-sample
+module github.com/astromechza/score-flyio
 
 go 1.23.4
 
