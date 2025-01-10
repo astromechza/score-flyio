@@ -6,61 +6,51 @@ This repo is forked from the <https://github.com/score-spec/score-implementation
 
 This is a rewrite of <https://github.com/astromechza/score-flyio-archived> since the Score spec has moved on and our understanding of resource provisioning and Score feature compatibility is more complete now.
 
+### Workflow
+
+Initialize the project directory. Because app names must be globally unique, you may need to use the `--fly-app-prefix` to add to the front of the Score workload names.
+
+```
+score-flyctl init --fly-app-prefix my-app-prefix-
+```
+
+Then generate the output Fly toml files per Score workload:
+
+```
+score-flyctl generate *.score.yaml
+```
+
+Then ensure the Fly app exists if it doesn't already and assign a shared ip if needed for each app:
+
+```
+fly apps create my-app-prefix-example-workload
+fly ip allocate-v4 -a my-app-prefix-example-workload --shared
+```
+
+Now we can deploy our workloads:
+
+```
+fly deploy -c fly_example-workload.toml
+```
+
+See [./samples](./samples) for some sample Score apps that we use during testing to check the conversion process. These should all be deployable.
+
 ### Supported 🟢
 
-Nothing.
+- A single workload container
+- Setting a container image or using a local Dockerfile+.dockerignore built by Fly.io on deploy
+- Setting `command` and `args` overrides
+- Setting `variables` for environment variables including placeholders
+- Setting cpu and memory resources in rounded multiples of 1 cpu, 256MB memory using the maximum of resource requests and resource limits if defined
+- Mounting files
+- Mounting a named Fly.io volume
+- Exposing tcp and udp network services with annotations for enabling Fly Proxy handlers
+- Converting liveness and readiness http get probes into Fly checks
 
 ### Not supported 🔴
 
-Everything.
-
-## Notes
-
-The general output artefact should be a flyctl config file. During provisioning, secrets might be set in the app. To start with, provisioners will simply output plaintext or secret values.
-
-Cannot support more than one container until https://community.fly.io/t/docker-without-docker-now-with-containers/22903 is released for flyctl. Also see https://community.fly.io/t/everybody-gets-containers-sidecars-and-init-containers-in-fks/23020.
-
-Track https://fly-changelog.fly.dev/ for new changes to Fly platform and flyctl.
-
-Support files via https://fly.io/docs/reference/configuration/#the-files-section.
-
-For volumes, assume the source already exists as a fly volume of the same name. Allow provisioners to generate then name if necessary.
-
-Use https://fly.io/docs/flyctl/secrets/ to set secret environment variables in the app. This may require us to hold secret values on the file system as they have been pulled from provisioners and then have a separate CLI command to converge the secrets prior to deployment.
-
-```
-score-flyctl init
-score-flyctl generate *.score.yaml
-score-flyctl export-secrets
-flyctl volume create fizzy
-flyctl deploy -c app-one.toml
-flyctl deploy -c app-two.toml
-score-flyctl remove-unused-secrets
-```
-
-Start with simple template provisioners that support values and secrets.
-
-
-## Sample apps
-
-This app runs the basic web server demo app and listens on the public internet with TLS. If you ran the same app on Kubernetes, you would need to also inject an ingress route or gateway-api route to this service.
-
-```yaml
-apiVersion: score.dev/v1b1
-metadata:
-  name: example
-  annotations:
-    fly-service-web-handlers: "tls,http"
-containers:
-  main:
-    image: ghcr.io/astromechza/demo-app:latest
-    readinessProbe:
-      httpGet:
-        port: 8080
-        path: /
-service:
-  ports:
-    web:
-      port: 443
-      targetPort: 8080
-```
+- Multiple workload containers (This may improve once https://community.fly.io/t/docker-without-docker-now-with-containers/22903 is released in Fly.io)
+- Secret environment variables
+- Setting the mode for mounted files
+- Setting the subpath or enabling readonly on mounted volumes
+- **Resource provisioning**
