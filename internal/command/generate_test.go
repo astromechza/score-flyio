@@ -15,9 +15,11 @@
 package command
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -172,4 +174,33 @@ resources:
             x: example
         type: something
 `, string(raw))
+}
+
+func TestSampleTests(t *testing.T) {
+	ioTestsDir, err := filepath.Abs("../../samples")
+	require.NoError(t, err)
+	entries, err := os.ReadDir(ioTestsDir)
+	require.NoError(t, err)
+	for _, e := range entries {
+		if e.IsDir() {
+			t.Run(e.Name(), func(t *testing.T) {
+				td := changeToTempDir(t)
+				_, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--fly-app-prefix=iotest-", "--file="})
+				require.NoError(t, err)
+				_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{"generate", filepath.Join(ioTestsDir, e.Name(), "score.yaml")})
+				require.NoError(t, err)
+				expectedEntries, _ := os.ReadDir(filepath.Join(ioTestsDir, e.Name()))
+				for _, ee := range expectedEntries {
+					if !ee.IsDir() && strings.HasPrefix(ee.Name(), "fly_") && strings.HasSuffix(ee.Name(), ".toml") {
+						expectedEntry, err := os.ReadFile(filepath.Join(ioTestsDir, e.Name(), ee.Name()))
+						require.NoError(t, err)
+						outputEntry, err := os.ReadFile(filepath.Join(td, ee.Name()))
+						require.NoError(t, err)
+						outputEntry = bytes.ReplaceAll(outputEntry, []byte(filepath.Join(ioTestsDir, e.Name())+"/"), []byte(""))
+						assert.Equal(t, string(expectedEntry), string(outputEntry))
+					}
+				}
+			})
+		}
+	}
 }

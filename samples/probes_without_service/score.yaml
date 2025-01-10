@@ -1,0 +1,17 @@
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  main:
+    image: ghcr.io/astromechza/demo-app:latest
+    livenessProbe:
+      httpGet:
+        port: 8080
+        path: /livez
+    readinessProbe:
+      httpGet:
+        port: 8080
+        path: /readyz
+        httpHeaders:
+          - name: Custom-Header
+            value: fruit

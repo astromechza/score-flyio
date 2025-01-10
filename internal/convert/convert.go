@@ -15,7 +15,6 @@
 package convert
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -97,7 +96,7 @@ func Workload(currentState *state.State, workloadName string) (*appconfig.AppCon
 	if container.Image == "." {
 		if f := currentState.Workloads[workloadName].File; f != nil {
 			output.Build.Dockerfile = filepath.Join(filepath.Dir(*f), "Dockerfile")
-			output.Build.Dockerfile = filepath.Join(filepath.Dir(*f), ".dockerignore")
+			output.Build.IgnoreFile = filepath.Join(filepath.Dir(*f), ".dockerignore")
 		}
 	} else {
 		output.Build.Image = container.Image
@@ -141,11 +140,8 @@ func Workload(currentState *state.State, workloadName string) (*appconfig.AppCon
 			}
 			if f.Source != nil {
 				if !filepath.IsAbs(*f.Source) && workload.File != nil {
-					if lp, err := filepath.Rel(filepath.Dir(*workload.File), *f.Source); err != nil {
-						return nil, nil, fmt.Errorf("container[%s].files[%d]: failed to find relative path: %w", containerName, i, err)
-					} else {
-						f.Source = &lp
-					}
+					lp := filepath.Join(filepath.Dir(*workload.File), *f.Source)
+					f.Source = &lp
 				}
 			}
 			if f.NoExpand == nil || !*f.NoExpand {
@@ -162,24 +158,14 @@ func Workload(currentState *state.State, workloadName string) (*appconfig.AppCon
 					} else if !utf8.Valid(raw) {
 						return nil, nil, fmt.Errorf("container[%s].files[%d]: cannot perform interpolation on non utf-8 file (did you mean to set noExpand?)", containerName, i)
 					}
-					out, err := framework.SubstituteString(string(raw), sf)
+					stringRaw := string(raw)
+					out, err := framework.SubstituteString(stringRaw, sf)
 					if err != nil {
 						return nil, nil, fmt.Errorf("container[%s].files[%d]: failed to interpolate in source file: %w", containerName, i, err)
 					}
-					newRaw := []byte(out)
-					if !bytes.Equal(raw, newRaw) {
-						tf, err := os.CreateTemp("", "*")
-						if err != nil {
-							return nil, nil, fmt.Errorf("container[%s].files[%d]: failed to create tempfile: %w", containerName, i, err)
-						}
-						if _, err := tf.Write(newRaw); err != nil {
-							return nil, nil, fmt.Errorf("container[%s].files[%d]: failed to write tempfile: %w", containerName, i, err)
-						}
-						if err := tf.Close(); err != nil {
-							return nil, nil, fmt.Errorf("container[%s].files[%d]: failed to close tempfile: %w", containerName, i, err)
-						}
-						n := tf.Name()
-						f.Source = &n
+					if stringRaw != out {
+						f.Source = nil
+						f.Content = &out
 					}
 				}
 			}
@@ -242,6 +228,7 @@ func Workload(currentState *state.State, workloadName string) (*appconfig.AppCon
 
 			if v, _ := workloadAnnotations[fmt.Sprintf("%sservice-%s-auto-stop", annotationPrefix, name)].(string); v != "" {
 				svc.AutoStopMachines = v
+				svc.AutoStartMachines = true
 			}
 			if v, _ := workloadAnnotations[fmt.Sprintf("%sservice-%s-min-running", annotationPrefix, name)].(string); v != "" {
 				if iv, err := strconv.Atoi(v); err != nil {

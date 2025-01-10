@@ -1,0 +1,13 @@
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+  annotations:
+    score-flyio.astromechza.github.com/service-web-handlers: "http"
+containers:
+  main:
+    image: ghcr.io/astromechza/demo-app:latest
+service:
+  ports:
+    web:
+      port: 80
+      targetPort: 8080

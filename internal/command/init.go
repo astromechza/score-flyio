@@ -73,33 +73,37 @@ var initCmd = &cobra.Command{
 		}
 
 		initCmdScoreFile, _ := cmd.Flags().GetString(initCmdFileFlag)
-		if _, err := os.Stat(initCmdScoreFile); err != nil {
-			if !errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("failed to check for existing Score file: %w", err)
-			}
-			workload := &scoretypes.Workload{
-				ApiVersion: "score.dev/v1b1",
-				Metadata: map[string]interface{}{
-					"name": "example",
-				},
-				Containers: map[string]scoretypes.Container{
-					"main": {
-						Image: "stefanprodan/podinfo",
+		if initCmdScoreFile != "" {
+			if _, err := os.Stat(initCmdScoreFile); err != nil {
+				if !errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("failed to check for existing Score file: %w", err)
+				}
+				workload := &scoretypes.Workload{
+					ApiVersion: "score.dev/v1b1",
+					Metadata: map[string]interface{}{
+						"name": "example",
 					},
-				},
-				Service: &scoretypes.WorkloadService{
-					Ports: map[string]scoretypes.ServicePort{
-						"web": {Port: 8080},
+					Containers: map[string]scoretypes.Container{
+						"main": {
+							Image: "stefanprodan/podinfo",
+						},
 					},
-				},
+					Service: &scoretypes.WorkloadService{
+						Ports: map[string]scoretypes.ServicePort{
+							"web": {Port: 8080},
+						},
+					},
+				}
+				rawScore, _ := yaml.Marshal(workload)
+				if err := os.WriteFile(initCmdScoreFile, rawScore, 0755); err != nil {
+					return fmt.Errorf("failed to write Score file: %w", err)
+				}
+				slog.Info("Created initial Score file", "file", initCmdScoreFile)
+			} else {
+				slog.Info("Skipping creation of initial Score file since it already exists", "file", initCmdScoreFile)
 			}
-			rawScore, _ := yaml.Marshal(workload)
-			if err := os.WriteFile(initCmdScoreFile, rawScore, 0755); err != nil {
-				return fmt.Errorf("failed to write Score file: %w", err)
-			}
-			slog.Info("Created initial Score file", "file", initCmdScoreFile)
 		} else {
-			slog.Info("Skipping creation of initial Score file since it already exists", "file", initCmdScoreFile)
+			slog.Info("Skipping creation of initial Score file since the file was set to an empty string", "file", initCmdScoreFile)
 		}
 
 		return nil

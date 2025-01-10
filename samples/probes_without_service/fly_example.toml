@@ -1,0 +1,18 @@
+app = "iotest-example"
+
+[build]
+  image = "ghcr.io/astromechza/demo-app:latest"
+
+[checks]
+  [checks.liveness_probe]
+    method = "get"
+    path = "/livez"
+    port = 8080
+    type = "http"
+  [checks.readiness_probe]
+    method = "get"
+    path = "/readyz"
+    port = 8080
+    type = "http"
+    [checks.readiness_probe.headers]
+      Custom-Header = "fruit"

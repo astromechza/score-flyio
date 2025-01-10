@@ -1,0 +1,16 @@
+app = "iotest-example"
+
+[build]
+  image = "ghcr.io/astromechza/demo-app:latest"
+
+[[files]]
+  guest_path = "/mnt/stub.txt"
+  raw_value = "aGVsbG8gZXhhbXBsZQo="
+
+[[files]]
+  guest_path = "/mnt/stub-no-expand.txt"
+  local_path = "stub.txt"
+
+[[files]]
+  guest_path = "/mnt/other/thing"
+  raw_value = "SGVsbG8gV29ybGQ="

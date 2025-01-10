@@ -1,0 +1,13 @@
+app = "iotest-example"
+
+[build]
+  image = "ghcr.io/astromechza/demo-app:latest"
+
+[[services]]
+  internal_port = 8080
+  min_machines_running = 0
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80

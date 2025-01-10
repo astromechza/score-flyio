@@ -1,0 +1,14 @@
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  main:
+    image: ghcr.io/astromechza/demo-app:latest
+    files:
+    - target: /mnt/stub.txt
+      source: ./stub.txt
+    - target: /mnt/stub-no-expand.txt
+      source: ./stub.txt
+      noExpand: true
+    - target: /mnt/other/thing
+      content: Hello World

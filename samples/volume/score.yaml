@@ -1,0 +1,11 @@
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  main:
+    image: ghcr.io/astromechza/demo-app:latest
+    volumes:
+    - target: /mnt/vol
+      source: my-volume
+      readOnly: false
+      path: /

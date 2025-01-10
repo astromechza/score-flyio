@@ -1,0 +1,9 @@
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  main:
+    image: ghcr.io/astromechza/demo-app:latest
+    variables:
+      NAME: John Smith
+      WITH_PLACEHOLDER: "_${metadata.name}_$${hi}_"

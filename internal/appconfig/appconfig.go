@@ -43,6 +43,7 @@ type File struct {
 }
 
 type Service struct {
+	AutoStartMachines  bool                   `toml:"auto_start_machines,omitempty" json:"auto_start_machines,omitempty"`
 	AutoStopMachines   string                 `toml:"auto_stop_machines,omitempty" json:"auto_stop_machines,omitempty"`
 	Concurrency        map[string]interface{} `toml:"concurrency,omitempty" json:"concurrency,omitempty"`
 	HttpChecks         []HttpCheck            `toml:"http_checks,omitempty" json:"http_checks,omitempty"`

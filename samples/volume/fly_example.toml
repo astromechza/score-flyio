@@ -1,0 +1,8 @@
+app = "iotest-example"
+
+[build]
+  image = "ghcr.io/astromechza/demo-app:latest"
+
+[[mounts]]
+  destination = "/mnt/vol"
+  source = "my-volume"
