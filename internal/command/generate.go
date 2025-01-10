@@ -15,13 +15,13 @@
 package command
 
 import (
-	"bytes"
 	"fmt"
 	"log/slog"
 	"os"
 	"slices"
 	"strings"
 
+	"github.com/BurntSushi/toml"
 	"github.com/imdario/mergo"
 	"github.com/score-spec/score-go/framework"
 	scoreloader "github.com/score-spec/score-go/loader"
@@ -39,7 +39,6 @@ const (
 	generateCmdOverridesFileFlag    = "overrides-file"
 	generateCmdOverridePropertyFlag = "override-property"
 	generateCmdImageFlag            = "image"
-	generateCmdOutputFlag           = "output"
 )
 
 var generateCmd = &cobra.Command{
@@ -114,8 +113,6 @@ var generateCmd = &cobra.Command{
 						container.Image = v
 						slog.Info(fmt.Sprintf("Set container image for container '%s' to %s from --%s", containerName, v, generateCmdImageFlag))
 						workload.Containers[containerName] = container
-					} else {
-						return fmt.Errorf("failed to convert '%s' because container '%s' has no image and --image was not provided: %w", arg, containerName, err)
 					}
 				}
 			}
@@ -136,11 +133,11 @@ var generateCmd = &cobra.Command{
 
 		slog.Info("Primed resources", "#workloads", len(currentState.Workloads), "#resources", len(currentState.Resources))
 
-		outputManifests := make([]map[string]interface{}, 0)
-
 		if currentState, err = provisioners.ProvisionResources(currentState); err != nil {
 			return fmt.Errorf("failed to provision resources: %w", err)
 		}
+
+		// TODO: extract secret keys and contents and store in the workload extras somewhere
 
 		sd.State = *currentState
 		if err := sd.Persist(); err != nil {
@@ -149,31 +146,24 @@ var generateCmd = &cobra.Command{
 		slog.Info("Persisted state file")
 
 		for workloadName := range currentState.Workloads {
-			if manifest, err := convert.Workload(currentState, workloadName); err != nil {
+			if manifest, _, err := convert.Workload(currentState, workloadName); err != nil {
 				return fmt.Errorf("failed to convert workloads: %w", err)
 			} else {
-				outputManifests = append(outputManifests, manifest)
+				dest := fmt.Sprintf("fly_%s.toml", workloadName)
+				f, err := os.CreateTemp("", "*")
+				if err != nil {
+					return fmt.Errorf("%s: failed to create tempfile: %w", workloadName, err)
+				} else if err := toml.NewEncoder(f).Encode(manifest); err != nil {
+					return fmt.Errorf("%s: failed to encode toml: %w", workloadName, err)
+				} else if err := f.Close(); err != nil {
+					return fmt.Errorf("%s: failed to close tempfile: %w", workloadName, err)
+				} else if err := os.Rename(f.Name(), dest); err != nil {
+					return fmt.Errorf("%s: failed to rename tempfile: %w", workloadName, err)
+				}
+				slog.Info(fmt.Sprintf("Wrote manifest to %s for workload '%s'", dest, workloadName))
 			}
-			slog.Info(fmt.Sprintf("Wrote manifest to manifests buffer for workload '%s'", workloadName))
 		}
 
-		out := new(bytes.Buffer)
-		for _, manifest := range outputManifests {
-			out.WriteString("---\n")
-			_ = yaml.NewEncoder(out).Encode(manifest)
-		}
-		v, _ := cmd.Flags().GetString(generateCmdOutputFlag)
-		if v == "" {
-			return fmt.Errorf("no output file specified")
-		} else if v == "-" {
-			_, _ = fmt.Fprint(cmd.OutOrStdout(), out.String())
-		} else if err := os.WriteFile(v+".tmp", out.Bytes(), 0644); err != nil {
-			return fmt.Errorf("failed to write output file: %w", err)
-		} else if err := os.Rename(v+".tmp", v); err != nil {
-			return fmt.Errorf("failed to complete writing output file: %w", err)
-		} else {
-			slog.Info(fmt.Sprintf("Wrote manifests to '%s'", v))
-		}
 		return nil
 	},
 }
@@ -220,7 +210,6 @@ func parseAndApplyOverrideProperty(entry string, flagName string, spec map[strin
 }
 
 func init() {
-	generateCmd.Flags().StringP(generateCmdOutputFlag, "o", "manifests.yaml", "The output manifests file to write the manifests to")
 	generateCmd.Flags().String(generateCmdOverridesFileFlag, "", "An optional file of Score overrides to merge in")
 	generateCmd.Flags().StringArray(generateCmdOverridePropertyFlag, []string{}, "An optional set of path=key overrides to set or remove")
 	generateCmd.Flags().String(generateCmdImageFlag, "", "An optional container image to use for any container with image == '.'")
