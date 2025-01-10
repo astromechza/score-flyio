@@ -15,6 +15,7 @@
 package command
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -133,17 +134,17 @@ var generateCmd = &cobra.Command{
 
 		slog.Info("Primed resources", "#workloads", len(currentState.Workloads), "#resources", len(currentState.Resources))
 
-		if currentState, err = provisioners.ProvisionResources(currentState); err != nil {
+		currentState, err = provisioners.ProvisionResources(currentState)
+		if currentState != nil {
+			sd.State = *currentState
+			if persistErr := sd.Persist(); persistErr != nil {
+				return fmt.Errorf("failed to persist state file: %w", errors.Join(persistErr, err))
+			}
+			slog.Info("Persisted state file")
+		}
+		if err != nil {
 			return fmt.Errorf("failed to provision resources: %w", err)
 		}
-
-		// TODO: extract secret keys and contents and store in the workload extras somewhere
-
-		sd.State = *currentState
-		if err := sd.Persist(); err != nil {
-			return fmt.Errorf("failed to persist state file: %w", err)
-		}
-		slog.Info("Persisted state file")
 
 		for workloadName := range currentState.Workloads {
 			if manifest, _, err := convert.Workload(currentState, workloadName); err != nil {

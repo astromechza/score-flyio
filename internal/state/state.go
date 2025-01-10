@@ -31,7 +31,26 @@ const (
 )
 
 type StateExtras struct {
-	AppPrefix string `json:"app_prefix"`
+	AppPrefix    string        `json:"app_prefix"`
+	Provisioners []Provisioner `json:"provisioners"`
+}
+
+type Provisioner struct {
+	ProvisionerId string           `json:"id"`
+	ResourceType  string           `json:"resource_type"`
+	ResourceClass string           `json:"resource_class,omitempty"`
+	ResourceId    string           `json:"resource_id,omitempty"`
+	Cmd           *CmdProvisioner  `json:"cmd,omitempty"`
+	Http          *HttpProvisioner `json:"http,omitempty"`
+}
+
+type CmdProvisioner struct {
+	Binary string   `json:"binary"`
+	Args   []string `json:"args"`
+}
+
+type HttpProvisioner struct {
+	Url string `json:"url"`
 }
 
 type WorkloadExtras struct{}
