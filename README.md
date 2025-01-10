@@ -39,3 +39,28 @@ score-flyctl remove-unused-secrets
 ```
 
 Start with simple template provisioners that support values and secrets.
+
+
+## Sample apps
+
+This app runs the basic web server demo app and listens on the public internet with TLS. If you ran the same app on Kubernetes, you would need to also inject an ingress route or gateway-api route to this service.
+
+```yaml
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+  annotations:
+    fly-service-web-handlers: "tls,http"
+containers:
+  main:
+    image: ghcr.io/astromechza/demo-app:latest
+    readinessProbe:
+      httpGet:
+        port: 8080
+        path: /
+service:
+  ports:
+    web:
+      port: 443
+      targetPort: 8080
+```
