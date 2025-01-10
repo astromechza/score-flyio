@@ -15,15 +15,15 @@
 package command
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/astromechza/score-flyio/internal/state"
 )
 
 func changeToDir(t *testing.T, dir string) string {
@@ -49,7 +49,7 @@ func TestGenerateWithoutInit(t *testing.T) {
 
 func TestGenerateWithoutScoreFiles(t *testing.T) {
 	_ = changeToTempDir(t)
-	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--fly-app-prefix=example"})
 	assert.NoError(t, err)
 	assert.Equal(t, "", stdout)
 	stdout, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{"generate"})
@@ -59,7 +59,7 @@ func TestGenerateWithoutScoreFiles(t *testing.T) {
 
 func TestInitAndGenerateWithBadFile(t *testing.T) {
 	td := changeToTempDir(t)
-	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--fly-app-prefix=example"})
 	assert.NoError(t, err)
 	assert.Equal(t, "", stdout)
 
@@ -72,7 +72,7 @@ func TestInitAndGenerateWithBadFile(t *testing.T) {
 
 func TestInitAndGenerateWithBadScore(t *testing.T) {
 	td := changeToTempDir(t)
-	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--fly-app-prefix=example"})
 	assert.NoError(t, err)
 	assert.Equal(t, "", stdout)
 
@@ -83,93 +83,31 @@ func TestInitAndGenerateWithBadScore(t *testing.T) {
 	assert.Equal(t, "", stdout)
 }
 
-func TestInitAndGenerate_with_sample(t *testing.T) {
-	td := changeToTempDir(t)
-	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+func TestSampleTests(t *testing.T) {
+	ioTestsDir, err := filepath.Abs("../../samples")
 	require.NoError(t, err)
-	assert.Equal(t, "", stdout)
-	stdout, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
-		"generate", "-o", "manifests.yaml", "--", "score.yaml",
-	})
+	entries, err := os.ReadDir(ioTestsDir)
 	require.NoError(t, err)
-	assert.Equal(t, "", stdout)
-	raw, err := os.ReadFile(filepath.Join(td, "manifests.yaml"))
-	assert.NoError(t, err)
-	assert.Equal(t, `---
-apiVersion: score.dev/v1b1
-containers:
-    main:
-        image: stefanprodan/podinfo
-metadata:
-    name: example
-service:
-    ports:
-        web:
-            port: 8080
-`, string(raw))
-
-	// check that state was persisted
-	sd, ok, err := state.LoadStateDirectory(td)
-	assert.NoError(t, err)
-	assert.True(t, ok)
-	assert.Equal(t, "score.yaml", *sd.State.Workloads["example"].File)
-	assert.Len(t, sd.State.Workloads, 1)
-	assert.Len(t, sd.State.Resources, 0)
-}
-
-func TestInitAndGenerate_with_full_example(t *testing.T) {
-	td := changeToTempDir(t)
-	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
-	require.NoError(t, err)
-	assert.Equal(t, "", stdout)
-
-	_ = os.Remove(filepath.Join(td, "score.yaml"))
-	assert.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`
-apiVersion: score.dev/v1b1
-metadata:
-    name: example
-containers:
-    main:
-        image: stefanprodan/podinfo
-        variables:
-            key: value
-            dynamic: ${metadata.name}
-        files:
-        - target: /somefile
-          content: |
-            ${metadata.name}
-resources:
-    thing:
-        type: something
-        params:
-          x: ${metadata.name}
-`), 0755))
-
-	_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{
-		"generate", "-o", "manifests.yaml", "--", "score.yaml",
-	})
-	require.NoError(t, err)
-	raw, err := os.ReadFile(filepath.Join(td, "manifests.yaml"))
-	assert.NoError(t, err)
-	assert.Equal(t, `---
-apiVersion: score.dev/v1b1
-containers:
-    main:
-        files:
-            - content: |
-                example
-              noExpand: true
-              target: /somefile
-        image: stefanprodan/podinfo
-        variables:
-            dynamic: example
-            key: value
-metadata:
-    name: example
-resources:
-    thing:
-        params:
-            x: example
-        type: something
-`, string(raw))
+	for _, e := range entries {
+		if e.IsDir() {
+			t.Run(e.Name(), func(t *testing.T) {
+				td := changeToTempDir(t)
+				_, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--fly-app-prefix=iotest-", "--file="})
+				require.NoError(t, err)
+				_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{"generate", filepath.Join(ioTestsDir, e.Name(), "score.yaml")})
+				require.NoError(t, err)
+				expectedEntries, _ := os.ReadDir(filepath.Join(ioTestsDir, e.Name()))
+				for _, ee := range expectedEntries {
+					if !ee.IsDir() && strings.HasPrefix(ee.Name(), "fly_") && strings.HasSuffix(ee.Name(), ".toml") {
+						expectedEntry, err := os.ReadFile(filepath.Join(ioTestsDir, e.Name(), ee.Name()))
+						require.NoError(t, err)
+						outputEntry, err := os.ReadFile(filepath.Join(td, ee.Name()))
+						require.NoError(t, err)
+						outputEntry = bytes.ReplaceAll(outputEntry, []byte(filepath.Join(ioTestsDir, e.Name())+"/"), []byte(""))
+						assert.Equal(t, string(expectedEntry), string(outputEntry))
+					}
+				}
+			})
+		}
+	}
 }

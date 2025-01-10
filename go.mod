@@ -4,7 +4,7 @@ go 1.23.4
 
 require (
 	github.com/imdario/mergo v1.0.1
-	github.com/score-spec/score-go v1.8.5
+	github.com/score-spec/score-go v1.8.6-0.20250109153337-a0c3023fa550
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.10.0
@@ -13,6 +13,7 @@ require (
 
 require (
 	dario.cat/mergo v1.0.1 // indirect
+	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect

@@ -30,11 +30,15 @@ const (
 	FileName                      = "state.yaml"
 )
 
+type StateExtras struct {
+	AppPrefix string `json:"app_prefix"`
+}
+
 type WorkloadExtras struct{}
 
 type ResourceExtras struct{}
 
-type State = framework.State[framework.NoExtras, WorkloadExtras, ResourceExtras]
+type State = framework.State[StateExtras, WorkloadExtras, ResourceExtras]
 
 // The StateDirectory holds the local state of the project, including any configuration, extensions,
 // plugins, or resource provisioning state when possible.

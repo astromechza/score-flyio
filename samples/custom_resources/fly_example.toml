@@ -1,0 +1,8 @@
+app = "iotest-example"
+
+[build]
+  image = "ghcr.io/astromechza/demo-app:latest"
+
+[vm]
+  cpus = 2
+  memory = "768MB"

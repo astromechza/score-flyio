@@ -1,0 +1,8 @@
+app = "iotest-example"
+
+[build]
+  image = "ghcr.io/astromechza/demo-app:latest"
+
+[env]
+  NAME = "John Smith"
+  WITH_PLACEHOLDER = "_example_${hi}_"

@@ -29,7 +29,8 @@ import (
 )
 
 const (
-	initCmdFileFlag = "file"
+	initCmdFileFlag      = "file"
+	initCmdAppPrefixFlag = "fly-app-prefix"
 )
 
 var initCmd = &cobra.Command{
@@ -42,17 +43,24 @@ var initCmd = &cobra.Command{
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
-
 		sd, ok, err := state.LoadStateDirectory(".")
 		if err != nil {
 			return fmt.Errorf("failed to load existing state directory: %w", err)
 		} else if ok {
 			slog.Info("Found existing state directory", "dir", sd.Path)
+			pref, _ := cmd.Flags().GetString(initCmdAppPrefixFlag)
+			if pref != "" && pref != sd.State.Extras.AppPrefix {
+				return fmt.Errorf("--%s cannot be changed after first init ('%s' != '%s')", initCmdAppPrefixFlag, pref, sd.State.Extras.AppPrefix)
+			}
 		} else {
-			slog.Info("Writing new state directory", "dir", state.DefaultRelativeStateDirectory)
+			pref, _ := cmd.Flags().GetString(initCmdAppPrefixFlag)
+			if pref == "" {
+				return fmt.Errorf("--%s must be set on first init", initCmdAppPrefixFlag)
+			}
 			sd = &state.StateDirectory{
 				Path: state.DefaultRelativeStateDirectory,
 				State: state.State{
+					Extras:      state.StateExtras{AppPrefix: pref},
 					Workloads:   map[string]framework.ScoreWorkloadState[state.WorkloadExtras]{},
 					Resources:   map[framework.ResourceUid]framework.ScoreResourceState[state.ResourceExtras]{},
 					SharedState: map[string]interface{}{},
@@ -65,33 +73,37 @@ var initCmd = &cobra.Command{
 		}
 
 		initCmdScoreFile, _ := cmd.Flags().GetString(initCmdFileFlag)
-		if _, err := os.Stat(initCmdScoreFile); err != nil {
-			if !errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("failed to check for existing Score file: %w", err)
-			}
-			workload := &scoretypes.Workload{
-				ApiVersion: "score.dev/v1b1",
-				Metadata: map[string]interface{}{
-					"name": "example",
-				},
-				Containers: map[string]scoretypes.Container{
-					"main": {
-						Image: "stefanprodan/podinfo",
+		if initCmdScoreFile != "" {
+			if _, err := os.Stat(initCmdScoreFile); err != nil {
+				if !errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("failed to check for existing Score file: %w", err)
+				}
+				workload := &scoretypes.Workload{
+					ApiVersion: "score.dev/v1b1",
+					Metadata: map[string]interface{}{
+						"name": "example",
 					},
-				},
-				Service: &scoretypes.WorkloadService{
-					Ports: map[string]scoretypes.ServicePort{
-						"web": {Port: 8080},
+					Containers: map[string]scoretypes.Container{
+						"main": {
+							Image: "stefanprodan/podinfo",
+						},
 					},
-				},
+					Service: &scoretypes.WorkloadService{
+						Ports: map[string]scoretypes.ServicePort{
+							"web": {Port: 8080},
+						},
+					},
+				}
+				rawScore, _ := yaml.Marshal(workload)
+				if err := os.WriteFile(initCmdScoreFile, rawScore, 0755); err != nil {
+					return fmt.Errorf("failed to write Score file: %w", err)
+				}
+				slog.Info("Created initial Score file", "file", initCmdScoreFile)
+			} else {
+				slog.Info("Skipping creation of initial Score file since it already exists", "file", initCmdScoreFile)
 			}
-			rawScore, _ := yaml.Marshal(workload)
-			if err := os.WriteFile(initCmdScoreFile, rawScore, 0755); err != nil {
-				return fmt.Errorf("failed to write Score file: %w", err)
-			}
-			slog.Info("Created initial Score file", "file", initCmdScoreFile)
 		} else {
-			slog.Info("Skipping creation of initial Score file since it already exists", "file", initCmdScoreFile)
+			slog.Info("Skipping creation of initial Score file since the file was set to an empty string", "file", initCmdScoreFile)
 		}
 
 		return nil
@@ -100,5 +112,6 @@ var initCmd = &cobra.Command{
 
 func init() {
 	initCmd.Flags().StringP(initCmdFileFlag, "f", "score.yaml", "The score file to initialize")
+	initCmd.Flags().String(initCmdAppPrefixFlag, "", "A prefix to add to Workload names to determine final Fly.io app names")
 	rootCmd.AddCommand(initCmd)
 }

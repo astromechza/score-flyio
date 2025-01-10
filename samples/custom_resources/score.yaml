@@ -1,0 +1,13 @@
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  main:
+    image: ghcr.io/astromechza/demo-app:latest
+    resources:
+      requests:
+        cpu: "1"
+        memory: "256M"
+      limits:
+        cpu: "1500m"
+        memory: "600M"

@@ -1,0 +1,8 @@
+app = "iotest-example"
+
+[build]
+  image = "debian:latest"
+
+[experimental]
+  cmd = ["while true; do sleep 10; echo fizzbuzz; done"]
+  entrypoint = ["/usr/bin/bash", "-c"]

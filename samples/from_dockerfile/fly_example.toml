@@ -1,0 +1,5 @@
+app = "iotest-example"
+
+[build]
+  dockerfile = "Dockerfile"
+  ignorefile = ".dockerignore"

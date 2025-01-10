@@ -1,0 +1,17 @@
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+  annotations:
+    score-flyio.astromechza.github.com/service-web-handlers: "tls,http"
+    score-flyio.astromechza.github.com/service-web-auto-stop: "stop"
+    score-flyio.astromechza.github.com/service-web-min-running: "1"
+    score-flyio.astromechza.github.com/service-web-http-options: "{\"h2_backend\":true}"
+    score-flyio.astromechza.github.com/service-web-concurrency: "{\"type\":\"requests\",\"hard_limit\":20,\"soft_limit\":10}"
+containers:
+  main:
+    image: ghcr.io/astromechza/demo-app:latest
+service:
+  ports:
+    web:
+      port: 443
+      targetPort: 8080

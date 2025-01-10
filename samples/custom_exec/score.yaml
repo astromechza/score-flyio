@@ -1,0 +1,8 @@
+apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  main:
+    image: debian:latest
+    command: ["/usr/bin/bash", "-c"]
+    args: ["while true; do sleep 10; echo fizzbuzz; done"]

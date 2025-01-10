@@ -36,7 +36,7 @@ func TestInitNominal(t *testing.T) {
 		require.NoError(t, os.Chdir(wd))
 	}()
 
-	stdout, stderr, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init"})
+	stdout, stderr, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--fly-app-prefix=example"})
 	assert.NoError(t, err)
 	assert.Equal(t, "", stdout)
 	assert.NotEqual(t, "", strings.TrimSpace(stderr))
@@ -66,7 +66,7 @@ func TestInitNominal_run_twice(t *testing.T) {
 	}()
 
 	// first init
-	stdout, stderr, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--file", "score2.yaml"})
+	stdout, stderr, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--fly-app-prefix=example", "--file", "score2.yaml"})
 	assert.NoError(t, err)
 	assert.Equal(t, "", stdout)
 	assert.NotEqual(t, "", strings.TrimSpace(stderr))

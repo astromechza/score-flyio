@@ -1,4 +1,5 @@
 .score-flyio/
-score.yaml
+/score.yaml
 .idea/
 manifests.yaml
+/*.toml

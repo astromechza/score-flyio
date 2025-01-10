@@ -1,0 +1,21 @@
+app = "iotest-example"
+
+[build]
+  image = "ghcr.io/astromechza/demo-app:latest"
+
+[[services]]
+  auto_start_machines = true
+  auto_stop_machines = "stop"
+  internal_port = 8080
+  min_machines_running = 1
+  protocol = "tcp"
+  [services.concurrency]
+    hard_limit = 20.0
+    soft_limit = 10.0
+    type = "requests"
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+    [services.ports.http_options]
+      h2_backend = true
