@@ -27,9 +27,10 @@ fly apps create my-app-prefix-example-workload
 fly ip allocate-v4 -a my-app-prefix-example-workload --shared
 ```
 
-Now we can deploy our workloads:
+Now we can stage our secrets and deploy our workloads:
 
 ```
+cat fly_example-workload.env | fly secrets import -a my-app-prefix-example-workload --stage 
 fly deploy -c fly_example-workload.toml
 ```
 
@@ -46,11 +47,11 @@ See [./samples](./samples) for some sample Score apps that we use during testing
 - Mounting a named Fly.io volume
 - Exposing tcp and udp network services with annotations for enabling Fly Proxy handlers
 - Converting liveness and readiness http get probes into Fly checks
+- Resource Provisioning using static json, command execution, or HTTP request
+- Secret variables and mounted files when they contain secret outputs from resources
 
 ### Not supported 🔴
 
 - Multiple workload containers (This may improve once https://community.fly.io/t/docker-without-docker-now-with-containers/22903 is released in Fly.io)
-- Secret environment variables
-- Setting the mode for mounted files
-- Setting the subpath or enabling readonly on mounted volumes
-- **Resource provisioning**
+- Setting the mode for mounted files (not supported by Fly)
+- Setting the subpath or enabling readonly on mounted volumes (not supported by Fly)
