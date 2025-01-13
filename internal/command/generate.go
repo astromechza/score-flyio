@@ -147,9 +147,12 @@ var generateCmd = &cobra.Command{
 		}
 
 		for workloadName := range currentState.Workloads {
-			if manifest, _, err := convert.Workload(currentState, workloadName); err != nil {
+			if manifest, secrets, err := convert.Workload(currentState, workloadName); err != nil {
 				return fmt.Errorf("failed to convert workloads: %w", err)
 			} else {
+				if err := writeSecretsFile(secrets, fmt.Sprintf("fly_%s.env", workloadName)); err != nil {
+					return fmt.Errorf("failed to write secrets env file: %w", err)
+				}
 				dest := fmt.Sprintf("fly_%s.toml", workloadName)
 				f, err := os.CreateTemp("", "*")
 				if err != nil {
@@ -167,6 +170,26 @@ var generateCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func writeSecretsFile(s map[string]string, p string) error {
+	content := new(strings.Builder)
+	for s2, s3 := range s {
+		if strings.Contains(s2, "=") || strings.Contains(s2, "\n") {
+			return fmt.Errorf("key '%s' contains = or \\n", s2)
+		}
+		content.WriteString(s2)
+		content.WriteRune('=')
+		if strings.Contains(s3, "\n") {
+			content.WriteString(`"""`)
+			content.WriteString(s3)
+			content.WriteString(`"""`)
+		} else {
+			content.WriteString(s3)
+		}
+		content.WriteRune('\n')
+	}
+	return os.WriteFile(p, []byte(content.String()), 0600)
 }
 
 func parseAndApplyOverrideFile(entry string, flagName string, spec map[string]interface{}) error {

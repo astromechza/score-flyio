@@ -104,7 +104,19 @@ ResourceLoop:
 				return out, fmt.Errorf("%s: failed to decode response from provisioner: %w", resUid, err)
 			}
 			resState.State = internal.Or(outputs.ResourceState, resState.State, map[string]interface{}{})
-			resState.Outputs = internal.Or(outputs.ResourceOutputs, resState.Outputs, map[string]interface{}{})
+			resState.Outputs = internal.Or(outputs.ResourceValues, resState.Outputs, map[string]interface{}{})
+
+			if outputs.ResourceSecrets != nil {
+				secretLookup := MapOutputLookupFunc(outputs.ResourceSecrets)
+				secretLookupWithMarker := func(keys ...string) (interface{}, error) {
+					v, err := secretLookup(keys...)
+					if err == nil {
+						MarkSecretAccessed()
+					}
+					return v, err
+				}
+				resState.OutputLookupFunc = OrOutputLookupFunc(secretLookupWithMarker, MapOutputLookupFunc(outputs.ResourceValues))
+			}
 			out.Resources[resUid] = resState
 			out.SharedState = internal.PatchMap(out.SharedState, internal.Or(outputs.SharedState, make(map[string]interface{})))
 			if err != nil {
@@ -131,7 +143,8 @@ type ProvisionerInputs struct {
 
 type ProvisionerOutputs struct {
 	ResourceState   map[string]interface{} `json:"state,omitempty"`
-	ResourceOutputs map[string]interface{} `json:"outputs,omitempty"`
+	ResourceValues  map[string]interface{} `json:"values,omitempty"`
+	ResourceSecrets map[string]interface{} `json:"secrets,omitempty"`
 	SharedState     map[string]interface{} `json:"shared,omitempty"`
 }
 
@@ -182,4 +195,35 @@ func doHttpRequest(h *state.HttpProvisioner, method string, inputs ProvisionerIn
 		return nil, fmt.Errorf("http provision request failed with status: %d %s: '%s'", res.StatusCode, res.Status, string(bod))
 	}
 	return bod, nil
+}
+
+func MapOutputLookupFunc(s map[string]interface{}) framework.OutputLookupFunc {
+	return func(keys ...string) (interface{}, error) {
+		var resolvedValue interface{}
+		resolvedValue = s
+		for _, k := range keys {
+			ok := resolvedValue != nil
+			if ok {
+				var mapV map[string]interface{}
+				mapV, ok = resolvedValue.(map[string]interface{})
+				if !ok {
+					return "", fmt.Errorf("cannot lookup key '%s', context is not a map", k)
+				}
+				resolvedValue, ok = mapV[k]
+			}
+			if !ok {
+				return "", fmt.Errorf("key '%s' not found", k)
+			}
+		}
+		return resolvedValue, nil
+	}
+}
+
+func OrOutputLookupFunc(a framework.OutputLookupFunc, b framework.OutputLookupFunc) framework.OutputLookupFunc {
+	return func(keys ...string) (interface{}, error) {
+		if v, err := a(keys...); err == nil {
+			return v, err
+		}
+		return b(keys...)
+	}
 }
