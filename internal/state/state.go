@@ -112,3 +112,7 @@ func LoadStateDirectory(directory string) (*StateDirectory, bool, error) {
 	}
 	return &StateDirectory{d, out}, true, nil
 }
+
+func (p *Provisioner) Matches(uid framework.ResourceUid) bool {
+	return p.ResourceType == uid.Type() && (p.ResourceClass == "" || p.ResourceClass == uid.Class()) && (p.ResourceId == "" || p.ResourceId == uid.Id())
+}

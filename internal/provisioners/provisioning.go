@@ -37,6 +37,11 @@ import (
 func ProvisionResources(currentState *state.State) (*state.State, error) {
 	out := currentState
 
+	orphanedResources := make(map[framework.ResourceUid]bool, len(currentState.Resources))
+	for uid, _ := range currentState.Resources {
+		orphanedResources[uid] = true
+	}
+
 	// provision in sorted order
 	orderedResources, err := currentState.GetSortedResourceUids()
 	if err != nil {
@@ -47,6 +52,7 @@ func ProvisionResources(currentState *state.State) (*state.State, error) {
 ResourceLoop:
 	for _, resUid := range orderedResources {
 		resState := out.Resources[resUid]
+		delete(orphanedResources, resUid)
 
 		var params map[string]interface{}
 		if len(resState.Params) > 0 {
@@ -64,9 +70,7 @@ ResourceLoop:
 		resState.Params = params
 
 		for _, provisioner := range currentState.Extras.Provisioners {
-			if provisioner.ResourceType != resState.Type ||
-				(provisioner.ResourceClass != "" && provisioner.ResourceClass != resState.Class) ||
-				(provisioner.ResourceId != "" && provisioner.ResourceId != resState.Id) {
+			if !provisioner.Matches(resUid) {
 				continue
 			}
 
@@ -93,6 +97,9 @@ ResourceLoop:
 			} else {
 				return out, fmt.Errorf("%s: provisioner is missing cmd or http section", resUid)
 			}
+			if err != nil {
+				return out, fmt.Errorf("%s: failed to call provisioner: %w", resUid, err)
+			}
 			if len(rawOutputs) == 0 {
 				return out, fmt.Errorf("provision request returned no output")
 			}
@@ -103,6 +110,7 @@ ResourceLoop:
 				slog.Debug("invalid provisioner outputs", slog.String("raw", string(rawOutputs)))
 				return out, fmt.Errorf("%s: failed to decode response from provisioner: %w", resUid, err)
 			}
+			resState.ProvisionerUri = provisioner.ProvisionerId
 			resState.State = internal.Or(outputs.ResourceState, resState.State, map[string]interface{}{})
 			resState.Outputs = internal.Or(outputs.ResourceValues, resState.Outputs, map[string]interface{}{})
 
@@ -127,18 +135,76 @@ ResourceLoop:
 		}
 		return out, fmt.Errorf("failed to find a provisioner for '%s.%s#%s'", resState.Type, resState.Class, resState.Id)
 	}
+
+	if len(orphanedResources) > 0 {
+		slog.Warn("Some resources are no longer attached to a workload, consider de-provisioning them", slog.Int("count", len(orphanedResources)))
+		for uid := range orphanedResources {
+			rt := out.Resources[uid]
+			rt.SourceWorkload = ""
+			out.Resources[uid] = rt
+		}
+	}
+
+	return out, nil
+}
+
+func DeProvisionResource(currentState *state.State, uid framework.ResourceUid) (*state.State, error) {
+	out := currentState
+
+	rs, ok := currentState.Resources[uid]
+	if !ok {
+		return nil, fmt.Errorf("no such resource exists")
+	}
+
+	pId := slices.IndexFunc(out.Extras.Provisioners, func(provisioner state.Provisioner) bool {
+		return provisioner.ProvisionerId == rs.ProvisionerUri
+	})
+	if pId < 0 {
+		return nil, fmt.Errorf("failed to find provisioner '%s' cannot deprovision resource", rs.ProvisionerUri)
+	}
+	provisioner := out.Extras.Provisioners[pId]
+
+	inputs := ProvisionerInputs{
+		ResourceUid:      rs.Guid,
+		ResourceType:     rs.Type,
+		ResourceClass:    rs.Class,
+		ResourceId:       rs.Id,
+		ResourceParams:   rs.Params,
+		ResourceMetadata: rs.Metadata,
+		ResourceState:    rs.State,
+		SharedState:      currentState.SharedState,
+	}
+
+	var err error
+	if provisioner.Http != nil {
+		_, err = doHttpRequest(provisioner.Http, http.MethodPost, inputs)
+	} else if provisioner.Cmd != nil {
+		_, err = doCmdRequest(provisioner.Cmd, "provision", inputs)
+	} else if provisioner.Static != nil {
+		// do nothing
+	} else {
+		return out, fmt.Errorf("%s: provisioner is missing cmd or http section", uid)
+	}
+	if err != nil {
+		return out, fmt.Errorf("%s: failed to call provisioner: %w", uid, err)
+	}
+	delete(out.Resources, uid)
+	slog.Info("Successfully de-provisioned resource and removed resource state from state file", slog.String("uid", string(uid)))
 	return out, nil
 }
 
 type ProvisionerInputs struct {
-	ResourceUid      string                 `json:"resource_uid"`
-	ResourceType     string                 `json:"resource_type"`
-	ResourceClass    string                 `json:"resource_class"`
-	ResourceId       string                 `json:"resource_id"`
+	ResourceUid   string                 `json:"resource_uid"`
+	ResourceType  string                 `json:"resource_type"`
+	ResourceClass string                 `json:"resource_class"`
+	ResourceId    string                 `json:"resource_id"`
+	ResourceState map[string]interface{} `json:"state"`
+	SharedState   map[string]interface{} `json:"shared"`
+
+	// only included for provision requests
+
 	ResourceParams   map[string]interface{} `json:"resource_params"`
 	ResourceMetadata map[string]interface{} `json:"resource_metadata"`
-	ResourceState    map[string]interface{} `json:"state"`
-	SharedState      map[string]interface{} `json:"shared"`
 }
 
 type ProvisionerOutputs struct {

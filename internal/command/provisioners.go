@@ -66,7 +66,7 @@ var (
 			if err != nil {
 				return fmt.Errorf("failed to load existing state directory: %w", err)
 			} else if !ok {
-				return fmt.Errorf("state directory does not exist, please run \"score-compose init\" first")
+				return fmt.Errorf("state directory does not exist, please run \"score-flyio init\" first")
 			}
 			newProv := state.Provisioner{
 				ProvisionerId: args[0],
@@ -133,7 +133,7 @@ var (
 			if err != nil {
 				return fmt.Errorf("failed to load existing state directory: %w", err)
 			} else if !ok {
-				return fmt.Errorf("state directory does not exist, please run \"score-compose init\" first")
+				return fmt.Errorf("state directory does not exist, please run \"score-flyio init\" first")
 			}
 			sd.State.Extras.Provisioners = slices.DeleteFunc(sd.State.Extras.Provisioners, func(provisioner state.Provisioner) bool {
 				if provisioner.ProvisionerId == args[0] {
