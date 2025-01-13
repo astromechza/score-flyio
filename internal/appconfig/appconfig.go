@@ -37,9 +37,10 @@ type Mount struct {
 }
 
 type File struct {
-	GuestPath string  `toml:"guest_path,omitempty" json:"guest_path,omitempty"`
-	LocalPath *string `toml:"local_path,omitempty" json:"local_path,omitempty"`
-	RawValue  *string `toml:"raw_value,omitempty" json:"raw_value,omitempty"`
+	GuestPath  string  `toml:"guest_path,omitempty" json:"guest_path,omitempty"`
+	LocalPath  *string `toml:"local_path,omitempty" json:"local_path,omitempty"`
+	RawValue   *string `toml:"raw_value,omitempty" json:"raw_value,omitempty"`
+	SecretName *string `toml:"secret_name,omitempty" json:"secret_name,omitempty"`
 }
 
 type Service struct {

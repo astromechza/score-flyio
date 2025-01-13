@@ -15,9 +15,12 @@
 package convert
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -31,6 +34,7 @@ import (
 	scoretypes "github.com/score-spec/score-go/types"
 
 	"github.com/astromechza/score-flyio/internal/appconfig"
+	"github.com/astromechza/score-flyio/internal/provisioners"
 	"github.com/astromechza/score-flyio/internal/state"
 )
 
@@ -89,6 +93,8 @@ func Workload(currentState *state.State, workloadName string) (*appconfig.AppCon
 		Build:   &appconfig.Build{},
 	}
 
+	outputSecrets := make(map[string]string)
+
 	if len(workload.Spec.Containers) != 1 {
 		return nil, nil, fmt.Errorf("containers: only 1 container per workload is supported until Fly multi-container support is released")
 	}
@@ -125,11 +131,17 @@ func Workload(currentState *state.State, workloadName string) (*appconfig.AppCon
 	if len(container.Variables) > 0 {
 		output.Env = make(map[string]string, len(container.Variables))
 		for key, value := range container.Variables {
-			out, err := framework.SubstituteString(value, sf)
+			sf2, sa := provisioners.BuildSubstitutionFuncWithSecretWatch(sf)
+			out, err := framework.SubstituteString(value, sf2)
 			if err != nil {
 				return nil, nil, fmt.Errorf("container[%s].variables: %s: %w", containerName, key, err)
 			}
-			output.Env[key] = out
+			if *sa {
+				slog.Warn("Secret accessed as part of resolving container variables, converting it into a runtime secret")
+				outputSecrets[key] = out
+			} else {
+				output.Env[key] = out
+			}
 		}
 	}
 	if len(container.Files) > 0 {
@@ -144,9 +156,10 @@ func Workload(currentState *state.State, workloadName string) (*appconfig.AppCon
 					f.Source = &lp
 				}
 			}
+			sf2, sa := provisioners.BuildSubstitutionFuncWithSecretWatch(sf)
 			if f.NoExpand == nil || !*f.NoExpand {
 				if f.Content != nil {
-					out, err := framework.SubstituteString(*f.Content, sf)
+					out, err := framework.SubstituteString(*f.Content, sf2)
 					if err != nil {
 						return nil, nil, fmt.Errorf("container[%s].files[%d]: failed to interpolate in contents: %w", containerName, i, err)
 					}
@@ -159,7 +172,7 @@ func Workload(currentState *state.State, workloadName string) (*appconfig.AppCon
 						return nil, nil, fmt.Errorf("container[%s].files[%d]: cannot perform interpolation on non utf-8 file (did you mean to set noExpand?)", containerName, i)
 					}
 					stringRaw := string(raw)
-					out, err := framework.SubstituteString(stringRaw, sf)
+					out, err := framework.SubstituteString(stringRaw, sf2)
 					if err != nil {
 						return nil, nil, fmt.Errorf("container[%s].files[%d]: failed to interpolate in source file: %w", containerName, i, err)
 					}
@@ -170,8 +183,19 @@ func Workload(currentState *state.State, workloadName string) (*appconfig.AppCon
 				}
 			}
 			if f.Content != nil {
-				encoded := base64.StdEncoding.EncodeToString([]byte(*f.Content))
-				output.Files = append(output.Files, appconfig.File{GuestPath: f.Target, RawValue: &encoded})
+				if *sa {
+					slog.Warn("Secret accessed as part of resolving container files, marking output as a runtime secret")
+					h := sha256.New()
+					h.Write([]byte(workloadName))
+					h.Write([]byte(containerName))
+					h.Write([]byte(f.Target))
+					hs := hex.EncodeToString(h.Sum(nil))
+					outputSecrets[hs] = base64.StdEncoding.EncodeToString([]byte(*f.Content))
+					output.Files = append(output.Files, appconfig.File{GuestPath: f.Target, SecretName: &hs})
+				} else {
+					encoded := base64.StdEncoding.EncodeToString([]byte(*f.Content))
+					output.Files = append(output.Files, appconfig.File{GuestPath: f.Target, RawValue: &encoded})
+				}
 				continue
 			} else if f.Source != nil {
 				output.Files = append(output.Files, appconfig.File{GuestPath: f.Target, LocalPath: f.Source})
@@ -197,8 +221,8 @@ func Workload(currentState *state.State, workloadName string) (*appconfig.AppCon
 		}
 	}
 
-	if workload.Spec.Service != nil && len(workload.Spec.Service.Ports) > 0 {
-		output.Services = make([]appconfig.Service, 0, len(workload.Spec.Service.Ports))
+	output.Services = make([]appconfig.Service, 0)
+	if workload.Spec.Service != nil {
 		for name, def := range workload.Spec.Service.Ports {
 			svc := appconfig.Service{
 				InternalPort: def.Port,
@@ -268,7 +292,7 @@ func Workload(currentState *state.State, workloadName string) (*appconfig.AppCon
 			output.Services[foundSvcIndex] = svc
 		}
 	}
-	return output, nil, nil
+	return output, outputSecrets, nil
 }
 
 func probeToTopLevelCheck(probe scoretypes.ContainerProbe) appconfig.TopLevelCheck {

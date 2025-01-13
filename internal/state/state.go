@@ -31,7 +31,27 @@ const (
 )
 
 type StateExtras struct {
-	AppPrefix string `json:"app_prefix"`
+	AppPrefix    string        `yaml:"app_prefix"`
+	Provisioners []Provisioner `yaml:"provisioners"`
+}
+
+type Provisioner struct {
+	ProvisionerId string                  `yaml:"id"`
+	ResourceType  string                  `yaml:"resource_type"`
+	ResourceClass string                  `yaml:"resource_class,omitempty"`
+	ResourceId    string                  `yaml:"resource_id,omitempty"`
+	Cmd           *CmdProvisioner         `yaml:"cmd,omitempty"`
+	Http          *HttpProvisioner        `yaml:"http,omitempty"`
+	Static        *map[string]interface{} `yaml:"static,omitempty"`
+}
+
+type CmdProvisioner struct {
+	Binary string   `json:"binary"`
+	Args   []string `json:"args"`
+}
+
+type HttpProvisioner struct {
+	Url string `json:"url"`
 }
 
 type WorkloadExtras struct{}
@@ -91,4 +111,8 @@ func LoadStateDirectory(directory string) (*StateDirectory, bool, error) {
 		return nil, true, fmt.Errorf("state file couldn't be decoded: %w", err)
 	}
 	return &StateDirectory{d, out}, true, nil
+}
+
+func (p *Provisioner) Matches(uid framework.ResourceUid) bool {
+	return p.ResourceType == uid.Type() && (p.ResourceClass == "" || p.ResourceClass == uid.Class()) && (p.ResourceId == "" || p.ResourceId == uid.Id())
 }

@@ -3,3 +3,4 @@
 .idea/
 manifests.yaml
 /*.toml
+/*.env
