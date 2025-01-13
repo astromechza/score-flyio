@@ -122,6 +122,33 @@ var (
 			return nil
 		},
 	}
+
+	removeProvisioner = &cobra.Command{
+		Use:           "remove PROVISIONER_ID",
+		Args:          cobra.ExactArgs(1),
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+			sd, ok, err := state.LoadStateDirectory(".")
+			if err != nil {
+				return fmt.Errorf("failed to load existing state directory: %w", err)
+			} else if !ok {
+				return fmt.Errorf("state directory does not exist, please run \"score-compose init\" first")
+			}
+			sd.State.Extras.Provisioners = slices.DeleteFunc(sd.State.Extras.Provisioners, func(provisioner state.Provisioner) bool {
+				if provisioner.ProvisionerId == args[0] {
+					slog.Info("Removing provisioner with id", slog.String("id", provisioner.ProvisionerId))
+					return true
+				}
+				return false
+			})
+			slog.Info("Writing new state directory", "dir", sd.Path)
+			if err := sd.Persist(); err != nil {
+				return fmt.Errorf("failed to persist new state directory: %w", err)
+			}
+			return nil
+		},
+	}
 )
 
 func init() {
@@ -138,5 +165,6 @@ func init() {
 
 	provisionersGroup.AddCommand(listProvisioners)
 	provisionersGroup.AddCommand(addProvisioner)
+	provisionersGroup.AddCommand(removeProvisioner)
 	rootCmd.AddCommand(provisionersGroup)
 }
