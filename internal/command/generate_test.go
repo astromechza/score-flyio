@@ -42,18 +42,18 @@ func changeToTempDir(t *testing.T) string {
 
 func TestGenerateWithoutInit(t *testing.T) {
 	_ = changeToTempDir(t)
-	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"generate"})
+	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"generate", "score.yaml"})
 	assert.EqualError(t, err, "state directory does not exist, please run \"init\" first")
 	assert.Equal(t, "", stdout)
 }
 
-func TestGenerateWithoutScoreFiles(t *testing.T) {
+func TestGenerateWithScoreFile(t *testing.T) {
 	_ = changeToTempDir(t)
 	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--fly-app-prefix=example"})
 	assert.NoError(t, err)
 	assert.Equal(t, "", stdout)
-	stdout, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{"generate"})
-	assert.EqualError(t, err, "project is empty, please add a score file")
+	stdout, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{"generate", "score.yaml"})
+	assert.NoError(t, err)
 	assert.Equal(t, "", stdout)
 }
 

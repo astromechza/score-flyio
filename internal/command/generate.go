@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -40,12 +39,13 @@ const (
 	generateCmdOverridesFileFlag    = "overrides-file"
 	generateCmdOverridePropertyFlag = "override-property"
 	generateCmdImageFlag            = "image"
+	generateCmdEnvSecretsFlag       = "secrets-file"
 )
 
 var generateCmd = &cobra.Command{
 	Use:   "generate",
 	Short: "Run the conversion from score file to output manifests",
-	Args:  cobra.ArbitraryArgs,
+	Args:  cobra.ExactArgs(1),
 	CompletionOptions: cobra.CompletionOptions{
 		HiddenDefaultCmd: true,
 	},
@@ -61,72 +61,63 @@ var generateCmd = &cobra.Command{
 		}
 		currentState := &sd.State
 
-		if len(args) != 1 && (cmd.Flags().Lookup(generateCmdOverridesFileFlag).Changed || cmd.Flags().Lookup(generateCmdOverridePropertyFlag).Changed || cmd.Flags().Lookup(generateCmdImageFlag).Changed) {
-			return fmt.Errorf("cannot use --%s, --%s, or --%s when 0 or more than 1 score files are provided", generateCmdOverridePropertyFlag, generateCmdOverridesFileFlag, generateCmdImageFlag)
+		workloadFile := args[0]
+		var rawWorkload map[string]interface{}
+		if raw, err := os.ReadFile(args[0]); err != nil {
+			return fmt.Errorf("failed to read input score file: %s: %w", workloadFile, err)
+		} else if err = yaml.Unmarshal(raw, &rawWorkload); err != nil {
+			return fmt.Errorf("failed to decode input score file: %s: %w", workloadFile, err)
 		}
 
-		slices.Sort(args)
-		for _, arg := range args {
-			var rawWorkload map[string]interface{}
-			if raw, err := os.ReadFile(arg); err != nil {
-				return fmt.Errorf("failed to read input score file: %s: %w", arg, err)
-			} else if err = yaml.Unmarshal(raw, &rawWorkload); err != nil {
-				return fmt.Errorf("failed to decode input score file: %s: %w", arg, err)
+		// apply overrides
+
+		if v, _ := cmd.Flags().GetString(generateCmdOverridesFileFlag); v != "" {
+			if err := parseAndApplyOverrideFile(v, generateCmdOverridesFileFlag, rawWorkload); err != nil {
+				return err
 			}
+		}
 
-			// apply overrides
-
-			if v, _ := cmd.Flags().GetString(generateCmdOverridesFileFlag); v != "" {
-				if err := parseAndApplyOverrideFile(v, generateCmdOverridesFileFlag, rawWorkload); err != nil {
+		// Now read, parse, and apply any override properties to the score files
+		if v, _ := cmd.Flags().GetStringArray(generateCmdOverridePropertyFlag); len(v) > 0 {
+			for _, overridePropertyEntry := range v {
+				if rawWorkload, err = parseAndApplyOverrideProperty(overridePropertyEntry, generateCmdOverridePropertyFlag, rawWorkload); err != nil {
 					return err
 				}
 			}
-
-			// Now read, parse, and apply any override properties to the score files
-			if v, _ := cmd.Flags().GetStringArray(generateCmdOverridePropertyFlag); len(v) > 0 {
-				for _, overridePropertyEntry := range v {
-					if rawWorkload, err = parseAndApplyOverrideProperty(overridePropertyEntry, generateCmdOverridePropertyFlag, rawWorkload); err != nil {
-						return err
-					}
-				}
-			}
-
-			// Ensure transforms are applied (be a good citizen)
-			if changes, err := scoreschema.ApplyCommonUpgradeTransforms(rawWorkload); err != nil {
-				return fmt.Errorf("failed to upgrade spec: %w", err)
-			} else if len(changes) > 0 {
-				for _, change := range changes {
-					slog.Info(fmt.Sprintf("Applying backwards compatible upgrade %s", change))
-				}
-			}
-
-			var workload scoretypes.Workload
-			if err = scoreschema.Validate(rawWorkload); err != nil {
-				return fmt.Errorf("invalid score file: %s: %w", arg, err)
-			} else if err = scoreloader.MapSpec(&workload, rawWorkload); err != nil {
-				return fmt.Errorf("failed to decode input score file: %s: %w", arg, err)
-			}
-
-			// Apply image override
-			for containerName, container := range workload.Containers {
-				if container.Image == "." {
-					if v, _ := cmd.Flags().GetString(generateCmdImageFlag); v != "" {
-						container.Image = v
-						slog.Info(fmt.Sprintf("Set container image for container '%s' to %s from --%s", containerName, v, generateCmdImageFlag))
-						workload.Containers[containerName] = container
-					}
-				}
-			}
-
-			if currentState, err = currentState.WithWorkload(&workload, &arg, state.WorkloadExtras{}); err != nil {
-				return fmt.Errorf("failed to add score file to project: %s: %w", arg, err)
-			}
-			slog.Info("Added score file to project", "file", arg)
 		}
 
-		if len(currentState.Workloads) == 0 {
-			return fmt.Errorf("project is empty, please add a score file")
+		// Ensure transforms are applied (be a good citizen)
+		if changes, err := scoreschema.ApplyCommonUpgradeTransforms(rawWorkload); err != nil {
+			return fmt.Errorf("failed to upgrade spec: %w", err)
+		} else if len(changes) > 0 {
+			for _, change := range changes {
+				slog.Info(fmt.Sprintf("Applying backwards compatible upgrade %s", change))
+			}
 		}
+
+		var workload scoretypes.Workload
+		if err = scoreschema.Validate(rawWorkload); err != nil {
+			return fmt.Errorf("invalid score file: %s: %w", workloadFile, err)
+		} else if err = scoreloader.MapSpec(&workload, rawWorkload); err != nil {
+			return fmt.Errorf("failed to decode input score file: %s: %w", workloadFile, err)
+		}
+		workloadName := workload.Metadata["name"].(string)
+
+		// Apply image override
+		for containerName, container := range workload.Containers {
+			if container.Image == "." {
+				if v, _ := cmd.Flags().GetString(generateCmdImageFlag); v != "" {
+					container.Image = v
+					slog.Info(fmt.Sprintf("Set container image for container '%s' to %s from --%s", containerName, v, generateCmdImageFlag))
+					workload.Containers[containerName] = container
+				}
+			}
+		}
+
+		if currentState, err = currentState.WithWorkload(&workload, &workloadFile, state.WorkloadExtras{}); err != nil {
+			return fmt.Errorf("failed to add score file to project: %s: %w", workloadFile, err)
+		}
+		slog.Info("Added score file to project", "file", workloadFile)
 
 		if currentState, err = currentState.WithPrimedResources(); err != nil {
 			return fmt.Errorf("failed to prime resources: %w", err)
@@ -146,28 +137,33 @@ var generateCmd = &cobra.Command{
 			return fmt.Errorf("failed to provision resources: %w", err)
 		}
 
-		for workloadName := range currentState.Workloads {
-			if manifest, secrets, err := convert.Workload(currentState, workloadName); err != nil {
-				return fmt.Errorf("failed to convert workloads: %w", err)
+		if manifest, secrets, err := convert.Workload(currentState, workloadName); err != nil {
+			return fmt.Errorf("failed to convert workloads: %w", err)
+		} else {
+
+			dest := fmt.Sprintf("fly_%s.toml", workloadName)
+			f, err := os.CreateTemp("", "*")
+			if err != nil {
+				return fmt.Errorf("%s: failed to create tempfile: %w", workloadName, err)
+			} else if err := toml.NewEncoder(f).Encode(manifest); err != nil {
+				return fmt.Errorf("%s: failed to encode toml: %w", workloadName, err)
+			} else if err := f.Close(); err != nil {
+				return fmt.Errorf("%s: failed to close tempfile: %w", workloadName, err)
+			} else if err := os.Rename(f.Name(), dest); err != nil {
+				return fmt.Errorf("%s: failed to rename tempfile: %w", workloadName, err)
+			}
+			slog.Info(fmt.Sprintf("Wrote manifest to %s for workload '%s'", dest, workloadName))
+
+			if x, _ := cmd.Flags().GetString(generateCmdEnvSecretsFlag); x == "" {
+				if len(secrets) > 0 {
+					return fmt.Errorf("this workload uses application secrets at runtime, you must write these secrets to an output or stdout file using --secrets-file")
+				}
+			} else if err := writeSecretsFile(secrets, x); err != nil {
+				return fmt.Errorf("failed to write secrets env file: %w", err)
 			} else {
-				if err := writeSecretsFile(secrets, fmt.Sprintf("fly_%s.env", workloadName)); err != nil {
-					return fmt.Errorf("failed to write secrets env file: %w", err)
-				}
-				dest := fmt.Sprintf("fly_%s.toml", workloadName)
-				f, err := os.CreateTemp("", "*")
-				if err != nil {
-					return fmt.Errorf("%s: failed to create tempfile: %w", workloadName, err)
-				} else if err := toml.NewEncoder(f).Encode(manifest); err != nil {
-					return fmt.Errorf("%s: failed to encode toml: %w", workloadName, err)
-				} else if err := f.Close(); err != nil {
-					return fmt.Errorf("%s: failed to close tempfile: %w", workloadName, err)
-				} else if err := os.Rename(f.Name(), dest); err != nil {
-					return fmt.Errorf("%s: failed to rename tempfile: %w", workloadName, err)
-				}
-				slog.Info(fmt.Sprintf("Wrote manifest to %s for workload '%s'", dest, workloadName))
+				slog.Info(fmt.Sprintf("Wrote runtime secrets for workload '%s' to %s", workloadName, x))
 			}
 		}
-
 		return nil
 	},
 }
@@ -189,7 +185,12 @@ func writeSecretsFile(s map[string]string, p string) error {
 		}
 		content.WriteRune('\n')
 	}
-	return os.WriteFile(p, []byte(content.String()), 0600)
+	if p == "-" {
+		_, _ = fmt.Fprint(os.Stdout, content.String())
+		return nil
+	} else {
+		return os.WriteFile(p, []byte(content.String()), 0600)
+	}
 }
 
 func parseAndApplyOverrideFile(entry string, flagName string, spec map[string]interface{}) error {
@@ -237,5 +238,6 @@ func init() {
 	generateCmd.Flags().String(generateCmdOverridesFileFlag, "", "An optional file of Score overrides to merge in")
 	generateCmd.Flags().StringArray(generateCmdOverridePropertyFlag, []string{}, "An optional set of path=key overrides to set or remove")
 	generateCmd.Flags().String(generateCmdImageFlag, "", "An optional container image to use for any container with image == '.'")
+	generateCmd.Flags().String(generateCmdEnvSecretsFlag, "", "An optional output file for the runtime secrets in KEY=VALUE format")
 	rootCmd.AddCommand(generateCmd)
 }

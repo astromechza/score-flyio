@@ -88,7 +88,7 @@ ResourceLoop:
 				rawOutputs, err = doCmdRequest(provisioner.Cmd, "provision", inputs)
 			} else if provisioner.Static != nil {
 				rawOutputs, _ = json.Marshal(map[string]interface{}{
-					"outputs": internal.Or(*provisioner.Static, map[string]interface{}{}),
+					"values": internal.Or(*provisioner.Static, map[string]interface{}{}),
 				})
 			} else {
 				return out, fmt.Errorf("%s: provisioner is missing cmd or http section", resUid)
@@ -164,8 +164,13 @@ func doCmdRequest(c *state.CmdProvisioner, op string, inputs ProvisionerInputs) 
 	outputBuffer := new(bytes.Buffer)
 
 	cmdArgs := slices.Clone(c.Args)
+	for i, arg := range cmdArgs {
+		arg = strings.ReplaceAll(arg, "$SCORE_PROVISIONER_MODE", op)
+		cmdArgs[i] = arg
+	}
 	cmdArgs = append(cmdArgs, op)
 	cmd := exec.CommandContext(context.Background(), bin, cmdArgs...)
+	cmd.Env = append(cmd.Environ(), "SCORE_PROVISIONER_MODE="+op)
 	cmd.Stdin = bytes.NewReader(rawInput)
 	cmd.Stdout = outputBuffer
 	cmd.Stderr = os.Stderr
