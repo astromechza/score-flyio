@@ -38,7 +38,7 @@ func ProvisionResources(currentState *state.State) (*state.State, error) {
 	out := currentState
 
 	orphanedResources := make(map[framework.ResourceUid]bool, len(currentState.Resources))
-	for uid, _ := range currentState.Resources {
+	for uid := range currentState.Resources {
 		orphanedResources[uid] = true
 	}
 
