@@ -18,7 +18,7 @@ func DerefOrZero[k any](in *k) k {
 	return DerefOr(in, def)
 }
 
-func Or[k any](values ...k) k {
+func Or[k comparable, v any, m map[k]v](values ...m) m {
 	if len(values) > 0 {
 		for _, v := range values {
 			if v != nil {
@@ -27,7 +27,7 @@ func Or[k any](values ...k) k {
 		}
 		return values[len(values)-1]
 	}
-	var empty k
+	var empty m
 	return empty
 }
 

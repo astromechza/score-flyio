@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"maps"
 	"net/http"
 	"os"
@@ -43,6 +44,7 @@ func ProvisionResources(currentState *state.State) (*state.State, error) {
 	}
 
 	out.Resources = maps.Clone(out.Resources)
+ResourceLoop:
 	for _, resUid := range orderedResources {
 		resState := out.Resources[resUid]
 
@@ -79,16 +81,37 @@ func ProvisionResources(currentState *state.State) (*state.State, error) {
 				SharedState:      currentState.SharedState,
 			}
 
-			outputs, err := provisioner.Provision(inputs)
-			if outputs != nil {
-				resState.State = internal.Or(outputs.ResourceState, resState.State, map[string]interface{}{})
-				resState.Outputs = internal.Or(outputs.ResourceOutputs, resState.Outputs, map[string]interface{}{})
-				out.Resources[resUid] = resState
-				out.SharedState = internal.PatchMap(out.SharedState, internal.Or(outputs.SharedState, make(map[string]interface{})))
+			var rawOutputs []byte
+			if provisioner.Http != nil {
+				rawOutputs, err = doHttpRequest(provisioner.Http, http.MethodPost, inputs)
+			} else if provisioner.Cmd != nil {
+				rawOutputs, err = doCmdRequest(provisioner.Cmd, "provision", inputs)
+			} else if provisioner.Static != nil {
+				rawOutputs, _ = json.Marshal(map[string]interface{}{
+					"outputs": internal.Or(*provisioner.Static, map[string]interface{}{}),
+				})
+			} else {
+				return out, fmt.Errorf("%s: provisioner is missing cmd or http section", resUid)
 			}
+			if len(rawOutputs) == 0 {
+				return out, fmt.Errorf("provision request returned no output")
+			}
+			var outputs ProvisionerOutputs
+			dec := json.NewDecoder(bytes.NewReader(rawOutputs))
+			dec.DisallowUnknownFields()
+			if err := dec.Decode(&outputs); err != nil {
+				slog.Debug("invalid provisioner outputs", slog.String("raw", string(rawOutputs)))
+				return out, fmt.Errorf("%s: failed to decode response from provisioner: %w", resUid, err)
+			}
+			resState.State = internal.Or(outputs.ResourceState, resState.State, map[string]interface{}{})
+			resState.Outputs = internal.Or(outputs.ResourceOutputs, resState.Outputs, map[string]interface{}{})
+			out.Resources[resUid] = resState
+			out.SharedState = internal.PatchMap(out.SharedState, internal.Or(outputs.SharedState, make(map[string]interface{})))
 			if err != nil {
 				return out, fmt.Errorf("%s: failed to provision: %w", resUid, err)
 			}
+			slog.Info("Provisioned resource", slog.String("uid", string(resUid)))
+			continue ResourceLoop
 		}
 		return out, fmt.Errorf("failed to find a provisioner for '%s.%s#%s'", resState.Type, resState.Class, resState.Id)
 	}
@@ -107,34 +130,12 @@ type ProvisionerInputs struct {
 }
 
 type ProvisionerOutputs struct {
-	ResourceState   map[string]interface{} `json:"state"`
-	ResourceOutputs map[string]interface{} `json:"outputs"`
-	SharedState     map[string]interface{} `json:"shared"`
+	ResourceState   map[string]interface{} `json:"state,omitempty"`
+	ResourceOutputs map[string]interface{} `json:"outputs,omitempty"`
+	SharedState     map[string]interface{} `json:"shared,omitempty"`
 }
 
-var _ CanProvision = (*Provisioner)(nil)
-var _ CanProvision = (*CmdProvisioner)(nil)
-var _ CanProvision = (*HttpProvisioner)(nil)
-
-func (p *Provisioner) Provision(inputs ProvisionerInputs) (*ProvisionerOutputs, error) {
-	if p.Http != nil {
-		return p.Http.Provision(inputs)
-	} else if p.Cmd != nil {
-		return p.Cmd.Provision(inputs)
-	}
-	return nil, fmt.Errorf("provisioner is missing cmd or http definition")
-}
-
-func (p *Provisioner) DeProvision(inputs ProvisionerInputs) error {
-	if p.Http != nil {
-		return p.Http.DeProvision(inputs)
-	} else if p.Cmd != nil {
-		return p.Cmd.DeProvision(inputs)
-	}
-	return fmt.Errorf("provisioner is missing cmd or http definition")
-}
-
-func (c *CmdProvisioner) doCmdRequest(op string, inputs ProvisionerInputs) ([]byte, error) {
+func doCmdRequest(c *state.CmdProvisioner, op string, inputs ProvisionerInputs) ([]byte, error) {
 	bin := c.Binary
 	if !strings.HasPrefix(bin, "/") {
 		if b, err := exec.LookPath(bin); err != nil {
@@ -161,29 +162,7 @@ func (c *CmdProvisioner) doCmdRequest(op string, inputs ProvisionerInputs) ([]by
 	return outputBuffer.Bytes(), nil
 }
 
-func (c *CmdProvisioner) Provision(inputs ProvisionerInputs) (*ProvisionerOutputs, error) {
-	bod, err := c.doCmdRequest("provision", inputs)
-	if err != nil {
-		return nil, err
-	}
-	if len(bod) == 0 {
-		return nil, fmt.Errorf("http provision request returned no output")
-	}
-	var out ProvisionerOutputs
-	dec := json.NewDecoder(bytes.NewReader(bod))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&out); err != nil {
-		return nil, fmt.Errorf("failed to decode response from http provisioner: %w", err)
-	}
-	return &out, nil
-}
-
-func (c *CmdProvisioner) DeProvision(inputs ProvisionerInputs) error {
-	_, err := c.doCmdRequest("deprovision", inputs)
-	return err
-}
-
-func (h *HttpProvisioner) doHttpRequest(method string, inputs ProvisionerInputs) ([]byte, error) {
+func doHttpRequest(h *state.HttpProvisioner, method string, inputs ProvisionerInputs) ([]byte, error) {
 	raw, _ := json.Marshal(inputs)
 	req, err := http.NewRequest(method, h.Url, io.NopCloser(bytes.NewReader(raw)))
 	if err != nil {
@@ -203,26 +182,4 @@ func (h *HttpProvisioner) doHttpRequest(method string, inputs ProvisionerInputs)
 		return nil, fmt.Errorf("http provision request failed with status: %d %s: '%s'", res.StatusCode, res.Status, string(bod))
 	}
 	return bod, nil
-}
-
-func (h *HttpProvisioner) Provision(inputs ProvisionerInputs) (*ProvisionerOutputs, error) {
-	bod, err := h.doHttpRequest(http.MethodPost, inputs)
-	if err != nil {
-		return nil, err
-	}
-	if len(bod) == 0 {
-		return nil, fmt.Errorf("http provision request returned no output")
-	}
-	var out ProvisionerOutputs
-	dec := json.NewDecoder(bytes.NewReader(bod))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&out); err != nil {
-		return nil, fmt.Errorf("failed to decode response from http provisioner: %w", err)
-	}
-	return &out, nil
-}
-
-func (h *HttpProvisioner) DeProvision(inputs ProvisionerInputs) error {
-	_, err := h.doHttpRequest(http.MethodPost, inputs)
-	return err
 }

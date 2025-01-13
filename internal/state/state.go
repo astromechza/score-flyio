@@ -31,17 +31,18 @@ const (
 )
 
 type StateExtras struct {
-	AppPrefix    string        `json:"app_prefix"`
-	Provisioners []Provisioner `json:"provisioners"`
+	AppPrefix    string        `yaml:"app_prefix"`
+	Provisioners []Provisioner `yaml:"provisioners"`
 }
 
 type Provisioner struct {
-	ProvisionerId string           `json:"id"`
-	ResourceType  string           `json:"resource_type"`
-	ResourceClass string           `json:"resource_class,omitempty"`
-	ResourceId    string           `json:"resource_id,omitempty"`
-	Cmd           *CmdProvisioner  `json:"cmd,omitempty"`
-	Http          *HttpProvisioner `json:"http,omitempty"`
+	ProvisionerId string                  `yaml:"id"`
+	ResourceType  string                  `yaml:"resource_type"`
+	ResourceClass string                  `yaml:"resource_class,omitempty"`
+	ResourceId    string                  `yaml:"resource_id,omitempty"`
+	Cmd           *CmdProvisioner         `yaml:"cmd,omitempty"`
+	Http          *HttpProvisioner        `yaml:"http,omitempty"`
+	Static        *map[string]interface{} `yaml:"static,omitempty"`
 }
 
 type CmdProvisioner struct {
