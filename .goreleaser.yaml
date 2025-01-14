@@ -3,7 +3,7 @@ version: 2
 builds:
   - id: score-flyio
     binary: score-flyio
-    main: ./cmd/score-flyio
+    main: ./
     ldflags:
       - -X github.com/astromechza/score-flyio/internal/command.Version={{ .Version }}
     env:
