@@ -224,7 +224,7 @@ This outputs `host`, `port`, `username`, and `password` outputs for a super-user
 DB: postgres://${resources.db.username}:${resources.db.password}@${resources.db.host}:${resources.db.port}/postgres
 ```
 
-Once you have tested this, remember to deprovision the database resource through `score-flyio resources deprovision postgres.default#example.db`.
+Once you have tested this, remember to deprovision the database resource through `score-flyio resources deprovision postgres-instance.default#example.db`.
 
 You can use the following Score file as a test example:
 
