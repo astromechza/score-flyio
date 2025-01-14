@@ -22,27 +22,31 @@ import (
 	"github.com/astromechza/score-flyio/internal/provisioners/builtin"
 )
 
-var rootCmd = &cobra.Command{
-	Use:           "score-flyio",
-	SilenceErrors: true,
-	CompletionOptions: cobra.CompletionOptions{
-		HiddenDefaultCmd: true,
-	},
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if v, _ := cmd.Flags().GetCount("verbose"); v == 0 {
-			slog.SetDefault(slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelInfo})))
-		} else if v == 1 {
-			slog.SetDefault(slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelDebug})))
-		} else if v == 2 {
-			slog.SetDefault(slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelDebug, AddSource: true})))
-		}
-		return nil
-	},
-}
+var (
+	Version = "0.0.0"
+
+	rootCmd = &cobra.Command{
+		Use:           "score-flyio",
+		SilenceErrors: true,
+		CompletionOptions: cobra.CompletionOptions{
+			HiddenDefaultCmd: true,
+		},
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			if v, _ := cmd.Flags().GetCount("verbose"); v == 0 {
+				slog.SetDefault(slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelInfo})))
+			} else if v == 1 {
+				slog.SetDefault(slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelDebug})))
+			} else if v == 2 {
+				slog.SetDefault(slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelDebug, AddSource: true})))
+			}
+			return nil
+		},
+	}
+)
 
 func init() {
+	rootCmd.Version = Version
 	rootCmd.PersistentFlags().CountP("verbose", "v", "Increase log verbosity and detail by specifying this flag one or more times")
-
 	builtin.Install(rootCmd)
 }
 

@@ -4,12 +4,32 @@ builds:
   - id: score-flyio
     binary: score-flyio
     main: ./cmd/score-flyio
+    ldflags:
+      - -X github.com/astromechza/score-flyio/internal/command.Version={{ .Version }}
     env:
       - CGO_ENABLED=0
     targets:
       - linux_amd64_v1
       - linux_arm64
+      - windows_amd64_v1
       - darwin_amd64_v1
       - darwin_arm64
+archives:
+  - format_overrides:
+      - goos: windows
+        format: zip
 checksum:
   name_template: 'checksums.txt'
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - '--oidc-provider=github-actions'
+      - '--output-certificate=${certificate}'
+      - '--output-signature=${signature}'
+      - '${artifact}'
+      - --yes
+    artifacts: all
+    output: true
