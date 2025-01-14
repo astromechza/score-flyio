@@ -97,10 +97,10 @@ ResourceLoop:
 			} else {
 				return out, fmt.Errorf("%s: provisioner is missing cmd or http section", resUid)
 			}
-			if err != nil {
-				return out, fmt.Errorf("%s: failed to call provisioner: %w", resUid, err)
-			}
 			if len(rawOutputs) == 0 {
+				if err != nil {
+					return out, fmt.Errorf("%s: failed to call provisioner: %w", resUid, err)
+				}
 				return out, fmt.Errorf("provision request returned no output")
 			}
 			var outputs ProvisionerOutputs
@@ -113,7 +113,6 @@ ResourceLoop:
 			resState.ProvisionerUri = provisioner.ProvisionerId
 			resState.State = internal.Or(outputs.ResourceState, resState.State, map[string]interface{}{})
 			resState.Outputs = internal.Or(outputs.ResourceValues, resState.Outputs, map[string]interface{}{})
-
 			if outputs.ResourceSecrets != nil {
 				secretLookup := MapOutputLookupFunc(outputs.ResourceSecrets)
 				secretLookupWithMarker := func(keys ...string) (interface{}, error) {
@@ -177,9 +176,9 @@ func DeProvisionResource(currentState *state.State, uid framework.ResourceUid) (
 
 	var err error
 	if provisioner.Http != nil {
-		_, err = doHttpRequest(provisioner.Http, http.MethodPost, inputs)
+		_, err = doHttpRequest(provisioner.Http, http.MethodDelete, inputs)
 	} else if provisioner.Cmd != nil {
-		_, err = doCmdRequest(provisioner.Cmd, "provision", inputs)
+		_, err = doCmdRequest(provisioner.Cmd, "deprovision", inputs)
 	} else if provisioner.Static != nil {
 		// do nothing
 	} else {
@@ -234,14 +233,13 @@ func doCmdRequest(c *state.CmdProvisioner, op string, inputs ProvisionerInputs) 
 		arg = strings.ReplaceAll(arg, "$SCORE_PROVISIONER_MODE", op)
 		cmdArgs[i] = arg
 	}
-	cmdArgs = append(cmdArgs, op)
 	cmd := exec.CommandContext(context.Background(), bin, cmdArgs...)
 	cmd.Env = append(cmd.Environ(), "SCORE_PROVISIONER_MODE="+op)
 	cmd.Stdin = bytes.NewReader(rawInput)
 	cmd.Stdout = outputBuffer
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("failed to execute cmd provisioner: %w", err)
+		return outputBuffer.Bytes(), fmt.Errorf("failed to execute cmd provisioner: %w", err)
 	}
 	return outputBuffer.Bytes(), nil
 }
@@ -263,7 +261,7 @@ func doHttpRequest(h *state.HttpProvisioner, method string, inputs ProvisionerIn
 	defer res.Body.Close()
 	bod, _ := io.ReadAll(res.Body)
 	if res.StatusCode >= 300 {
-		return nil, fmt.Errorf("http provision request failed with status: %d %s: '%s'", res.StatusCode, res.Status, string(bod))
+		return bod, fmt.Errorf("http provision request failed with status: %d %s: '%s'", res.StatusCode, res.Status, string(bod))
 	}
 	return bod, nil
 }

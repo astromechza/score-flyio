@@ -18,6 +18,8 @@ import (
 	"log/slog"
 
 	"github.com/spf13/cobra"
+
+	"github.com/astromechza/score-flyio/internal/provisioners/builtin"
 )
 
 var rootCmd = &cobra.Command{
@@ -40,6 +42,8 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().CountP("verbose", "v", "Increase log verbosity and detail by specifying this flag one or more times")
+
+	builtin.Install(rootCmd)
 }
 
 func Execute() error {
