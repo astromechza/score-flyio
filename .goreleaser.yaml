@@ -1,0 +1,15 @@
+# Check the documentation at https://goreleaser.com
+version: 2
+builds:
+  - id: score-flyio
+    binary: score-flyio
+    main: ./cmd/score-flyio
+    env:
+      - CGO_ENABLED=0
+    targets:
+      - linux_amd64_v1
+      - linux_arm64
+      - darwin_amd64_v1
+      - darwin_arm64
+checksum:
+  name_template: 'checksums.txt'
