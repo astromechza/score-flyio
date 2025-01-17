@@ -3,11 +3,15 @@ package builtin
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
+	"fmt"
+	"io"
 	"log"
+	rand2 "math/rand"
 	"os"
 	"os/exec"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -15,126 +19,214 @@ import (
 	"github.com/astromechza/score-flyio/internal/provisioners"
 )
 
-var (
-	builtinPostgresProvision = &cobra.Command{
-		Use:           "provision",
-		Args:          cobra.NoArgs,
-		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			inputs, err := ReadProvisionerInputs(cmd.InOrStdin())
-			if err != nil {
-				return err
-			}
-			pgApp, ok := inputs.ResourceState["app"].(string)
-			if !ok {
-				pgApp = "pg-" + time.Now().UTC().Format("20060102150405")
-			}
-			password, ok := inputs.ResourceState["password"].(string)
-			if !ok {
-				passwordBytes := make([]byte, 10)
-				_, _ = rand.Read(passwordBytes)
-				password = hex.EncodeToString(passwordBytes)
-			}
-			org, err := flyOrg()
-			if err != nil {
-				return err
-			}
-			cmd.SilenceUsage = true
-			var createErr error
-			if apps, err := ListApps(org, cmd.ErrOrStderr()); err != nil {
-				return err
-			} else if !slices.ContainsFunc(apps, func(app ListedApp) bool {
-				log.Printf("Postgres app %s already exists in status '%s'", pgApp, app.Status)
-				return app.Name == pgApp
-			}) {
-				region, err := flyRegion()
-				if err != nil {
-					return err
-				}
-				log.Printf("Provisioning new postgres app")
-				c := exec.Command(
-					"fly", "postgres", "create", "--org", org,
-					"--name", pgApp, "--region", region, "--password", password, "--autostart",
-					"--initial-cluster-size", "1", "--vm-size", "shared-cpu-1x", "--volume-size", "10",
-				)
-				c.Env = os.Environ()
-				c.Stderr = cmd.ErrOrStderr()
-				c.Stdout = cmd.ErrOrStderr()
-				createErr = c.Run()
-			}
-
-			outputs := provisioners.ProvisionerOutputs{
-				ResourceState: map[string]interface{}{
-					"app":      pgApp,
-					"password": password,
-				},
-				ResourceValues: map[string]interface{}{
-					"host":     pgApp + ".flycast",
-					"port":     "5432",
-					"username": "postgres",
-					// Although this is intended as a postgres-instance driver, we also output the default database name
-					//	here so that it can technically be used as a postgres database directly.
-					"name":     "postgres",
-					"database": "postgres",
-				},
-				ResourceSecrets: map[string]interface{}{
-					"password": password,
-				},
-			}
-			_ = json.NewEncoder(cmd.OutOrStdout()).Encode(outputs)
-			return createErr
-		},
-	}
-
-	builtinPostgresDeProvision = &cobra.Command{
-		Use:           "deprovision",
-		Args:          cobra.NoArgs,
-		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			inputs, err := ReadProvisionerInputs(cmd.InOrStdin())
-			if err != nil {
-				return err
-			}
-			pgApp, ok := inputs.ResourceState["app"].(string)
-			if !ok {
-				log.Printf("Resource never provisioned an app")
-				return nil
-			}
-			org, err := flyOrg()
-			if err != nil {
-				return err
-			}
-			cmd.SilenceUsage = true
-			if apps, err := ListApps(org, cmd.ErrOrStderr()); err != nil {
-				return err
-			} else if !slices.ContainsFunc(apps, func(app ListedApp) bool {
-				return app.Name == pgApp
-			}) {
-				log.Printf("Postgres app %s does not exist", pgApp)
-				return nil
-			}
-			c := exec.Command("fly", "app", "destroy", pgApp, "--yes")
-			c.Env = os.Environ()
-			c.Stderr = cmd.ErrOrStderr()
-			c.Stdout = cmd.ErrOrStderr()
-			return c.Run()
-		},
-	}
-
-	builtinPostgresGroup = &cobra.Command{
-		Use: "postgres-instance",
-	}
-
-	builtinGroup = &cobra.Command{
-		Use: "builtin-provisioners",
-	}
+const (
+	SharedStateKey = "builtin-provisioners-postgres"
 )
 
-func Install(parent *cobra.Command) {
-	parent.AddCommand(builtinGroup)
+var (
+	builtinPostgresInstanceProvision = buildProvisionCommand(func(inputs provisioners.ProvisionerInputs, stderr io.Writer) (*provisioners.ProvisionerOutputs, error) {
+		pgApp, ok := inputs.ResourceState["app"].(string)
+		password, _ := inputs.ResourceState["password"].(string)
+		if !ok {
+			pgApp = "score-flyio-pg-" + time.Now().UTC().Format("20060102150405")
+			passwordBytes := make([]byte, 10)
+			_, _ = rand.Read(passwordBytes)
+			password = hex.EncodeToString(passwordBytes)
+		}
+		fc, err := NewFlyClient()
+		if err != nil {
+			return nil, fmt.Errorf("failed to setup fly api client: %w", err)
+		}
+		outputs := &provisioners.ProvisionerOutputs{
+			ResourceState: map[string]interface{}{
+				"app":      pgApp,
+				"password": password,
+			},
+		}
+		createErr := ensurePostgresInstance(fc, pgApp, password, stderr)
+		if createErr == nil {
+			outputs.ResourceValues = map[string]interface{}{
+				"host":     pgApp + ".flycast",
+				"port":     "5432",
+				"username": "postgres",
+				// Although this is intended as a postgres-instance driver, we also output the default database name
+				//	here so that it can technically be used as a postgres database directly.
+				"name":     "postgres",
+				"database": "postgres",
+			}
+			outputs.ResourceSecrets = map[string]interface{}{
+				"password": password,
+			}
+		}
+		return outputs, createErr
+	})
+
+	builtinPostgresInstanceDeProvision = buildDeProvisionCommand(func(inputs provisioners.ProvisionerInputs, stderr io.Writer) (*provisioners.ProvisionerOutputs, error) {
+		pgApp, ok := inputs.ResourceState["app"].(string)
+		if !ok {
+			log.Printf("Resource never provisioned an app")
+			return nil, nil
+		}
+		fc, err := NewFlyClient()
+		if err != nil {
+			return nil, fmt.Errorf("failed to setup fly api client: %w", err)
+		}
+		return nil, DeleteApp(fc, pgApp)
+	})
+
+	builtinPostgresProvision = buildProvisionCommand(func(inputs provisioners.ProvisionerInputs, stderr io.Writer) (*provisioners.ProvisionerOutputs, error) {
+		sharedState, _ := inputs.SharedState[SharedStateKey].(map[string]interface{})
+		pgApp, ok := sharedState["app"].(string)
+		password, _ := sharedState["password"].(string)
+		dbNames, _ := sharedState["dbNames"].([]interface{})
+		if !ok {
+			pgApp = "score-flyio-pg-" + time.Now().UTC().Format("20060102150405")
+			passwordBytes := make([]byte, 10)
+			_, _ = rand.Read(passwordBytes)
+			password = hex.EncodeToString(passwordBytes)
+		}
+		fc, err := NewFlyClient()
+		if err != nil {
+			return nil, fmt.Errorf("failed to setup fly api client: %w", err)
+		}
+		outputs := &provisioners.ProvisionerOutputs{
+			SharedState: map[string]interface{}{
+				SharedStateKey: map[string]interface{}{
+					"app":      pgApp,
+					"password": password,
+					"dbNames":  dbNames,
+				},
+			},
+		}
+		if err := ensurePostgresInstance(fc, pgApp, password, stderr); err != nil {
+			return outputs, fmt.Errorf("failed to ensure postgres instance: %w", err)
+		}
+		dbName, ok := inputs.ResourceState["database"].(string)
+		dbUser, _ := inputs.ResourceState["username"].(string)
+		dbPassword, _ := inputs.ResourceState["password"].(string)
+		if !ok {
+			dbName = strings.Replace(inputs.ResourceId, ".", "-", -1) + strconv.Itoa(1000+rand2.Intn(9000))
+			dbUser = dbName + "-user"
+			passwordBytes := make([]byte, 10)
+			_, _ = rand.Read(passwordBytes)
+			dbPassword = hex.EncodeToString(passwordBytes)
+			if err := ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(`psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "CREATE DATABASE \"%[1]s\""`, dbName)}); err != nil {
+				return nil, fmt.Errorf("failed to create database: %w", err)
+			}
+			if err := ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(`psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "CREATE USER \"%[1]s\" WITH PASSWORD '%[2]s'"`, dbUser, dbPassword)}); err != nil {
+				return nil, fmt.Errorf("failed to create user: %w", err)
+			}
+			if err := ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(`psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "GRANT ALL PRIVILEGES ON DATABASE \"%s\" TO \"%s\""`, dbName, dbUser)}); err != nil {
+				return nil, fmt.Errorf("failed to assign role to user: %w", err)
+			}
+			if err := ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(`psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/%s" -c "GRANT ALL ON SCHEMA public TO \"%s\""`, dbName, dbUser)}); err != nil {
+				return nil, fmt.Errorf("failed to grant schema public user: %w", err)
+			}
+			dbNames = append(dbNames, dbName)
+			{
+				ss := outputs.SharedState[SharedStateKey].(map[string]interface{})
+				ss["dbNames"] = dbNames
+				outputs.SharedState[SharedStateKey] = ss
+			}
+			outputs.ResourceState = map[string]interface{}{
+				"database": dbName,
+				"username": dbUser,
+				"password": dbPassword,
+			}
+		}
+		outputs.ResourceValues = map[string]interface{}{
+			"host":     pgApp + ".flycast",
+			"port":     "5432",
+			"username": dbUser,
+			"name":     dbName,
+			"database": dbName,
+		}
+		outputs.ResourceSecrets = map[string]interface{}{
+			"password": dbPassword,
+		}
+		return outputs, nil
+	})
+
+	builtinPostgresDeProvision = buildDeProvisionCommand(func(inputs provisioners.ProvisionerInputs, stderr io.Writer) (*provisioners.ProvisionerOutputs, error) {
+		dbName, ok := inputs.ResourceState["database"].(string)
+		if !ok {
+			log.Printf("Postgres database was never assigned")
+			return nil, nil
+		}
+		dbUser, _ := inputs.ResourceState["username"].(string)
+		sharedState, ok := inputs.SharedState[SharedStateKey].(map[string]interface{})
+		if !ok {
+			log.Printf("Postgres instance no longer exists")
+			return nil, nil
+		}
+		pgApp, _ := sharedState["app"].(string)
+		dbNames, _ := sharedState["dbNames"].([]interface{})
+		if !slices.ContainsFunc(dbNames, func(i interface{}) bool {
+			x, _ := i.(string)
+			return x == dbName
+		}) {
+			log.Printf("Postgres database is already deprovisioned")
+			return nil, nil
+		}
+		fc, err := NewFlyClient()
+		if err != nil {
+			return nil, fmt.Errorf("failed to setup fly api client: %w", err)
+		}
+		dbNames = slices.DeleteFunc(dbNames, func(i interface{}) bool {
+			x, _ := i.(string)
+			return x == dbName
+		})
+		if len(dbNames) == 0 {
+			log.Printf("Deprovisioning postgres since this was the last database")
+			if err := DeleteApp(fc, pgApp); err != nil {
+				return nil, err
+			}
+			return &provisioners.ProvisionerOutputs{
+				SharedState: map[string]interface{}{
+					SharedStateKey: nil,
+				},
+			}, nil
+		}
+		if err := ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(
+			`set -e; psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "DROP DATABASE IF EXISTS \"%s\" WITH (FORCE)"; psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "DROP USER IF EXISTS \"%s\""`, dbName, dbUser)}); err != nil {
+			return nil, fmt.Errorf("failed to delete database: %w", err)
+		}
+		sharedState["dbNames"] = dbNames
+		return &provisioners.ProvisionerOutputs{
+			SharedState: map[string]interface{}{
+				SharedStateKey: sharedState,
+			},
+		}, nil
+	})
+)
+
+func ensurePostgresInstance(c *FlyClient, app, password string, stderr io.Writer) error {
+	if flyApp, ok, err := GetApp(c, app); err != nil {
+		return err
+	} else if ok {
+		log.Printf("Postgres app '%s' already exists in status '%s'", app, *flyApp.Status)
+	} else {
+		region, err := flyRegion()
+		if err != nil {
+			return err
+		}
+		log.Printf("Provisioning new postgres app")
+		c := exec.Command(
+			"fly", "postgres", "create", "--access-token", c.ApiToken,
+			"--name", app, "--region", region, "--password", password, "--autostart",
+			"--initial-cluster-size", "1", "--vm-size", "shared-cpu-1x", "--volume-size", "10",
+		)
+		c.Env = os.Environ()
+		c.Stderr = stderr
+		c.Stdout = stderr
+		return c.Run()
+	}
+	return nil
 }
 
-func init() {
-	builtinPostgresGroup.AddCommand(builtinPostgresProvision, builtinPostgresDeProvision)
-	builtinGroup.AddCommand(builtinPostgresGroup)
+func Install(parent *cobra.Command) {
+	group := &cobra.Command{Use: "builtin-provisioners"}
+	group.AddCommand(buildProvisionGroup("postgres-instance", builtinPostgresInstanceProvision, builtinPostgresInstanceDeProvision))
+	group.AddCommand(buildProvisionGroup("postgres", builtinPostgresProvision, builtinPostgresDeProvision))
+	parent.AddCommand(group)
 }

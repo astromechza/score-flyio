@@ -200,33 +200,34 @@ This will pull the `outputs` field out of the `prod-database-resource` item in t
 
 In this example, we don't need to use the `$SCORE_PROVISIONER_MODE` variable, because the state is static, but a more complex script may need to use this to determine if it is creating or destroying the resource.
 
-### Resource example: using the built-in Fly.io postgres provisioner
+### Resource example: using the built-in Fly.io postgres provisioners
 
-We've included a built-in `cmd` provisioner for a [Fly.io-based Postgres](https://fly.io/docs/postgres/). This is experimental and is used to demonstrate how to use asynchronous cmd provisioners that have remote state.
+We've included a built-in `cmd` provisioner for a [Fly.io-based Postgres](https://fly.io/docs/postgres/). This is experimental and is used to demonstrate how to use asynchronous cmd provisioners that have remote state. This comes in two variants, one for the `postgres` database type and one for the `postgres-instance` which can return a super-user.
 
 You can set this up via:
 
 ```
-score-flyio provisioners add flypg postgres-instance --cmd-binary=score-flyio --cmd-args='builtin-provisioners,postgres-instance,$SCORE_PROVISIONER_MODE'
+score-flyio provisioners add flypg postgres --cmd-binary=score-flyio --cmd-args='builtin-provisioners,postgres,$SCORE_PROVISIONER_MODE'
+score-flyio provisioners add flypginstance postgres-instance --cmd-binary=score-flyio --cmd-args='builtin-provisioners,postgres-instance,$SCORE_PROVISIONER_MODE'
 ```
 
-You will also need to export your Fly organization and preferred region as environment variables `FLY_ORG_NAME` and `FLY_REGION_NAME`.
+You will also need to export a Fly API Token and preferred region as environment variables `FLY_API_TOKEN` and `FLY_REGION_NAME`.
 
-Then you can use the `postgres-instance` resource type:
+Then you can use the `postgres` resource type:
 
 ```yaml
 resources:
     db:
-        type: postgres-instance
+        type: postgres
 ```
 
-This outputs `host`, `port`, `username`, and `password` outputs for a super-user connection. Since this is vanilla postgres, the default `postgres` database exists by default so you can connect to the following connection string from your app:
+This outputs `host`, `port`, `database`, `username`, and `password` outputs. You can connect to the following connection string from your app:
 
 ```yaml
-DB: postgres://${resources.db.username}:${resources.db.password}@${resources.db.host}:${resources.db.port}/postgres
+DB: postgres://${resources.db.username}:${resources.db.password}@${resources.db.host}:${resources.db.port}/${resources.db.database}
 ```
 
-Once you have tested this, remember to deprovision the database resource through `score-flyio resources deprovision postgres-instance.default#example.db`.
+Once you have tested this, remember to deprovision the database resource through `score-flyio resources deprovision postgres.default#example.db`.
 
 You can use the following Score file as a test example:
 
@@ -241,7 +242,7 @@ containers:
     main:
         image: ghcr.io/astromechza/demo-app:latest
         variables:
-            OVERRIDE_POSTGRES: postgres://${resources.db.username}:${resources.db.password}@${resources.db.host}:${resources.db.port}/postgres
+            OVERRIDE_POSTGRES: postgres://${resources.db.username}:${resources.db.password}@${resources.db.host}:${resources.db.port}/${resources.db.database}
         resources:
             requests:
                 cpu: "1"
@@ -253,5 +254,5 @@ service:
             targetPort: 8080
 resources:
     db:
-        type: postgres-instance
+        type: postgres
 ```

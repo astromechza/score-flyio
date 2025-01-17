@@ -174,20 +174,29 @@ func DeProvisionResource(currentState *state.State, uid framework.ResourceUid) (
 		SharedState:      currentState.SharedState,
 	}
 
+	var rawOutputs []byte
 	var err error
 	if provisioner.Http != nil {
-		_, err = doHttpRequest(provisioner.Http, http.MethodDelete, inputs)
+		rawOutputs, err = doHttpRequest(provisioner.Http, http.MethodDelete, inputs)
 	} else if provisioner.Cmd != nil {
-		_, err = doCmdRequest(provisioner.Cmd, "deprovision", inputs)
+		rawOutputs, err = doCmdRequest(provisioner.Cmd, "deprovision", inputs)
 	} else if provisioner.Static != nil {
 		// do nothing
 	} else {
 		return out, fmt.Errorf("%s: provisioner is missing cmd or http section", uid)
 	}
+	var outputs ProvisionerOutputs
+	dec := json.NewDecoder(bytes.NewReader(rawOutputs))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&outputs); err != nil {
+		slog.Debug("invalid provisioner outputs", slog.String("raw", string(rawOutputs)))
+		return out, fmt.Errorf("%s: failed to decode response from provisioner: %w", uid, err)
+	}
+	delete(out.Resources, uid)
+	out.SharedState = internal.PatchMap(out.SharedState, internal.Or(outputs.SharedState, make(map[string]interface{})))
 	if err != nil {
 		return out, fmt.Errorf("%s: failed to call provisioner: %w", uid, err)
 	}
-	delete(out.Resources, uid)
 	slog.Info("Successfully de-provisioned resource and removed resource state from state file", slog.String("uid", string(uid)))
 	return out, nil
 }
