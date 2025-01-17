@@ -16,7 +16,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/astromechza/score-flyio/internal/flymachines"
 	"github.com/astromechza/score-flyio/internal/provisioners"
 )
 
@@ -34,11 +33,7 @@ var (
 			_, _ = rand.Read(passwordBytes)
 			password = hex.EncodeToString(passwordBytes)
 		}
-		org, err := flyOrg()
-		if err != nil {
-			return nil, err
-		}
-		fc, err := FlyClient()
+		fc, err := NewFlyClient()
 		if err != nil {
 			return nil, fmt.Errorf("failed to setup fly api client: %w", err)
 		}
@@ -48,7 +43,7 @@ var (
 				"password": password,
 			},
 		}
-		createErr := ensurePostgresInstance(fc, org, pgApp, password, stderr)
+		createErr := ensurePostgresInstance(fc, pgApp, password, stderr)
 		if createErr == nil {
 			outputs.ResourceValues = map[string]interface{}{
 				"host":     pgApp + ".flycast",
@@ -72,7 +67,7 @@ var (
 			log.Printf("Resource never provisioned an app")
 			return nil, nil
 		}
-		fc, err := FlyClient()
+		fc, err := NewFlyClient()
 		if err != nil {
 			return nil, fmt.Errorf("failed to setup fly api client: %w", err)
 		}
@@ -90,11 +85,7 @@ var (
 			_, _ = rand.Read(passwordBytes)
 			password = hex.EncodeToString(passwordBytes)
 		}
-		org, err := flyOrg()
-		if err != nil {
-			return nil, err
-		}
-		fc, err := FlyClient()
+		fc, err := NewFlyClient()
 		if err != nil {
 			return nil, fmt.Errorf("failed to setup fly api client: %w", err)
 		}
@@ -107,10 +98,9 @@ var (
 				},
 			},
 		}
-		if err := ensurePostgresInstance(fc, org, pgApp, password, stderr); err != nil {
+		if err := ensurePostgresInstance(fc, pgApp, password, stderr); err != nil {
 			return outputs, fmt.Errorf("failed to ensure postgres instance: %w", err)
 		}
-
 		dbName, ok := inputs.ResourceState["database"].(string)
 		dbUser, _ := inputs.ResourceState["username"].(string)
 		dbPassword, _ := inputs.ResourceState["password"].(string)
@@ -178,7 +168,7 @@ var (
 			log.Printf("Postgres database is already deprovisioned")
 			return nil, nil
 		}
-		fc, err := FlyClient()
+		fc, err := NewFlyClient()
 		if err != nil {
 			return nil, fmt.Errorf("failed to setup fly api client: %w", err)
 		}
@@ -199,7 +189,7 @@ var (
 	})
 )
 
-func ensurePostgresInstance(c flymachines.ClientWithResponsesInterface, org, app, password string, stderr io.Writer) error {
+func ensurePostgresInstance(c *FlyClient, app, password string, stderr io.Writer) error {
 	if flyApp, ok, err := GetApp(c, app); err != nil {
 		return err
 	} else if ok {
@@ -211,7 +201,7 @@ func ensurePostgresInstance(c flymachines.ClientWithResponsesInterface, org, app
 		}
 		log.Printf("Provisioning new postgres app")
 		c := exec.Command(
-			"fly", "postgres", "create", "--org", org,
+			"fly", "postgres", "create", "--access-token", c.ApiToken,
 			"--name", app, "--region", region, "--password", password, "--autostart",
 			"--initial-cluster-size", "1", "--vm-size", "shared-cpu-1x", "--volume-size", "10",
 		)

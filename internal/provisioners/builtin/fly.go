@@ -11,7 +11,12 @@ import (
 	"github.com/astromechza/score-flyio/internal/flymachines"
 )
 
-func FlyClient() (flymachines.ClientWithResponsesInterface, error) {
+type FlyClient struct {
+	flymachines.ClientWithResponsesInterface
+	ApiToken string
+}
+
+func NewFlyClient() (*FlyClient, error) {
 	token, ok := os.LookupEnv("FLY_API_TOKEN")
 	if !ok || token == "" {
 		return nil, fmt.Errorf("FLY_API_TOKEN must be set")
@@ -24,19 +29,12 @@ func FlyClient() (flymachines.ClientWithResponsesInterface, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup client: %w", err)
 	}
-	return c, nil
+	return &FlyClient{ClientWithResponsesInterface: c, ApiToken: token}, nil
 }
 
 type ListedApp struct {
 	Name   string `json:"Name"`
 	Status string `json:"Status"`
-}
-
-func flyOrg() (string, error) {
-	if v, ok := os.LookupEnv("FLY_ORG_NAME"); ok && v != "" {
-		return v, nil
-	}
-	return "", fmt.Errorf("FLY_ORG_NAME not set")
 }
 
 func flyRegion() (string, error) {
