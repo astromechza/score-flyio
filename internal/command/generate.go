@@ -156,7 +156,10 @@ var generateCmd = &cobra.Command{
 
 			if x, _ := cmd.Flags().GetString(generateCmdEnvSecretsFlag); x == "" {
 				if len(secrets) > 0 {
-					return fmt.Errorf("this workload uses application secrets at runtime, you must write these secrets to an output or stdout file using --secrets-file")
+					return fmt.Errorf(
+						"this workload uses application secrets at runtime, you must write these secrets to an output or stdout file using --secrets-file and then install them for app '%s'",
+						currentState.Extras.AppPrefix+workloadName,
+					)
 				}
 			} else if err := writeSecretsFile(secrets, x); err != nil {
 				return fmt.Errorf("failed to write secrets env file: %w", err)
