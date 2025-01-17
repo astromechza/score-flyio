@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/astromechza/score-flyio/internal"
 	"github.com/astromechza/score-flyio/internal/flymachines"
@@ -21,6 +22,7 @@ func NewFlyClient() (*FlyClient, error) {
 	if !ok || token == "" {
 		return nil, fmt.Errorf("FLY_API_TOKEN must be set")
 	}
+	token = strings.TrimPrefix(token, "FlyV1 ")
 	c, err := flymachines.NewClientWithResponses("https://api.machines.dev/v1", flymachines.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
 		req.Header.Set("Authorization", "Bearer "+token)
 		log.Printf("Making API request %s %s", req.Method, req.URL)

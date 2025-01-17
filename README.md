@@ -213,6 +213,11 @@ score-flyio provisioners add flypginstance postgres-instance --cmd-binary=score-
 
 You will also need to export a Fly API Token and preferred region as environment variables `FLY_API_TOKEN` and `FLY_REGION_NAME`.
 
+```
+export FLY_REGION_NAME=lhr
+export FLY_API_TOKEN=$(fly tokens create org -x '24h')
+```
+
 Then you can use the `postgres` resource type:
 
 ```yaml
