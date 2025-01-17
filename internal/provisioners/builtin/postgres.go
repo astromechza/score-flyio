@@ -172,14 +172,25 @@ var (
 		if err != nil {
 			return nil, fmt.Errorf("failed to setup fly api client: %w", err)
 		}
-		if err := ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(
-			`set -e; psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "DROP DATABASE IF EXISTS \"%s\" WITH (FORCE)"; psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "DROP USER IF EXISTS \"%s\""`, dbName, dbUser)}); err != nil {
-			return nil, fmt.Errorf("failed to delete database: %w", err)
-		}
 		dbNames = slices.DeleteFunc(dbNames, func(i interface{}) bool {
 			x, _ := i.(string)
 			return x == dbName
 		})
+		if len(dbNames) == 0 {
+			log.Printf("Deprovisioning postgres since this was the last database")
+			if err := DeleteApp(fc, pgApp); err != nil {
+				return nil, err
+			}
+			return &provisioners.ProvisionerOutputs{
+				SharedState: map[string]interface{}{
+					SharedStateKey: nil,
+				},
+			}, nil
+		}
+		if err := ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(
+			`set -e; psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "DROP DATABASE IF EXISTS \"%s\" WITH (FORCE)"; psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "DROP USER IF EXISTS \"%s\""`, dbName, dbUser)}); err != nil {
+			return nil, fmt.Errorf("failed to delete database: %w", err)
+		}
 		sharedState["dbNames"] = dbNames
 		return &provisioners.ProvisionerOutputs{
 			SharedState: map[string]interface{}{
