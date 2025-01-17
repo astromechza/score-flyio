@@ -207,7 +207,7 @@ We've included a built-in `cmd` provisioner for a [Fly.io-based Postgres](https:
 You can set this up via:
 
 ```
-score-flyio provisioners add flypg postgres-instance --cmd-binary=score-flyio --cmd-args='builtin-provisioners,postgres-instance,$SCORE_PROVISIONER_MODE'
+score-flyio provisioners add flypg postgres --cmd-binary=score-flyio --cmd-args='builtin-provisioners,postgres,$SCORE_PROVISIONER_MODE'
 ```
 
 You will also need to export your Fly organization and preferred region as environment variables `FLY_ORG_NAME` and `FLY_REGION_NAME`.
@@ -229,6 +229,9 @@ DB: postgres://${resources.db.username}:${resources.db.password}@${resources.db.
 Once you have tested this, remember to deprovision the database resource through `score-flyio resources deprovision postgres-instance.default#example.db`.
 
 You can use the following Score file as a test example:
+
+go run ./ provisioners add flypg postgres --cmd-binary=go --cmd-args='run,./,builtin-provisioners,postgres,$SCORE_PROVISIONER_MODE'
+
 
 ```yaml
 apiVersion: score.dev/v1b1
