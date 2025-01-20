@@ -52,7 +52,7 @@ func TestInitNominal(t *testing.T) {
 		assert.Equal(t, state.DefaultRelativeStateDirectory, sd.Path)
 		assert.Len(t, sd.State.Workloads, 1)
 		assert.Equal(t, map[framework.ResourceUid]framework.ScoreResourceState[state.ResourceExtras]{}, sd.State.Resources)
-		assert.Equal(t, map[string]interface{}{}, sd.State.SharedState)
+		assert.Equal(t, map[string]interface{}{state.SharedStateAppPrefixKey: "example"}, sd.State.SharedState)
 	}
 }
 
@@ -88,6 +88,6 @@ func TestInitNominal_run_twice(t *testing.T) {
 		assert.Equal(t, state.DefaultRelativeStateDirectory, sd.Path)
 		assert.Equal(t, map[string]framework.ScoreWorkloadState[state.WorkloadExtras]{}, sd.State.Workloads)
 		assert.Equal(t, map[framework.ResourceUid]framework.ScoreResourceState[state.ResourceExtras]{}, sd.State.Resources)
-		assert.Equal(t, map[string]interface{}{}, sd.State.SharedState)
+		assert.Equal(t, map[string]interface{}{state.SharedStateAppPrefixKey: "example"}, sd.State.SharedState)
 	}
 }
