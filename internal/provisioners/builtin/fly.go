@@ -10,6 +10,7 @@ import (
 
 	"github.com/astromechza/score-flyio/internal"
 	"github.com/astromechza/score-flyio/internal/flymachines"
+	"github.com/astromechza/score-flyio/internal/state"
 )
 
 type FlyClient struct {
@@ -103,4 +104,10 @@ func ExecAnyStartedMachine(c flymachines.ClientWithResponsesInterface, app strin
 		return fmt.Errorf("no machines to exec on")
 	}
 	return ExecMachine(c, app, *(machines[0].Id), command)
+}
+
+// FlyAppPrefixFromState extracts the app prefix from the shared state which should have been inserted at score-flyio init time.
+func FlyAppPrefixFromState(sharedState map[string]interface{}) string {
+	v, _ := sharedState[state.SharedStateAppPrefixKey].(string)
+	return v
 }

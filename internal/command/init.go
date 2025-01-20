@@ -53,17 +53,17 @@ var initCmd = &cobra.Command{
 				return fmt.Errorf("--%s cannot be changed after first init ('%s' != '%s')", initCmdAppPrefixFlag, pref, sd.State.Extras.AppPrefix)
 			}
 		} else {
-			pref, _ := cmd.Flags().GetString(initCmdAppPrefixFlag)
-			if pref == "" {
+			if !cmd.Flags().Lookup(initCmdAppPrefixFlag).Changed {
 				return fmt.Errorf("--%s must be set on first init", initCmdAppPrefixFlag)
 			}
+			pref, _ := cmd.Flags().GetString(initCmdAppPrefixFlag)
 			sd = &state.StateDirectory{
 				Path: state.DefaultRelativeStateDirectory,
 				State: state.State{
 					Extras:      state.StateExtras{AppPrefix: pref},
 					Workloads:   map[string]framework.ScoreWorkloadState[state.WorkloadExtras]{},
 					Resources:   map[framework.ResourceUid]framework.ScoreResourceState[state.ResourceExtras]{},
-					SharedState: map[string]interface{}{},
+					SharedState: map[string]interface{}{state.SharedStateAppPrefixKey: pref},
 				},
 			}
 			slog.Info("Writing new state directory", "dir", sd.Path)

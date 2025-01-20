@@ -28,7 +28,7 @@ var (
 		pgApp, ok := inputs.ResourceState["app"].(string)
 		password, _ := inputs.ResourceState["password"].(string)
 		if !ok {
-			pgApp = "score-flyio-pg-" + time.Now().UTC().Format("20060102150405")
+			pgApp = FlyAppPrefixFromState(inputs.SharedState) + "pg-" + time.Now().UTC().Format("20060102150405")
 			passwordBytes := make([]byte, 10)
 			_, _ = rand.Read(passwordBytes)
 			password = hex.EncodeToString(passwordBytes)
@@ -80,7 +80,7 @@ var (
 		password, _ := sharedState["password"].(string)
 		dbNames, _ := sharedState["dbNames"].([]interface{})
 		if !ok {
-			pgApp = "score-flyio-pg-" + time.Now().UTC().Format("20060102150405")
+			pgApp = FlyAppPrefixFromState(inputs.SharedState) + "pg-" + time.Now().UTC().Format("20060102150405")
 			passwordBytes := make([]byte, 10)
 			_, _ = rand.Read(passwordBytes)
 			password = hex.EncodeToString(passwordBytes)

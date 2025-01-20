@@ -28,6 +28,7 @@ import (
 const (
 	DefaultRelativeStateDirectory = ".score-flyio"
 	FileName                      = "state.yaml"
+	SharedStateAppPrefixKey       = "score-flyio-app-prefix"
 )
 
 type StateExtras struct {

@@ -10,7 +10,7 @@ Download and extract the binary from the latest release on GitHub: https://githu
 
 ### Workflow
 
-Initialize the project directory. Because app names must be globally unique in Fly, you may need to use the `--fly-app-prefix` to add to the front of the Score workload names. The project may consume multiple Score files and share resource instances between them.
+Initialize the project directory. Because app names must be globally unique in Fly, you may need to use the `--fly-app-prefix` to add to the front of the Score workload names. This prefix should also be used by provisioners for namespacing any other apps created for this project.
 
 ```
 score-flyio init --fly-app-prefix my-app-prefix-
