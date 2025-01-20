@@ -272,39 +272,49 @@ func Workload(currentState *state.State, workloadName string) (*appconfig.AppCon
 		}
 	}
 
+	machineChecks := make(map[string]appconfig.TopLevelCheck)
 	if container.LivenessProbe != nil {
-		output.Checks = map[string]appconfig.TopLevelCheck{"liveness_probe": probeToTopLevelCheck(*container.LivenessProbe)}
-	}
-
-	if container.ReadinessProbe != nil {
-		hg := container.ReadinessProbe.HttpGet
-		foundSvcIndex := slices.IndexFunc(output.Services, func(service appconfig.Service) bool {
-			return service.InternalPort == hg.Port
-		})
-		if foundSvcIndex == -1 {
-			if output.Checks == nil {
-				output.Checks = make(map[string]appconfig.TopLevelCheck)
-			}
-			output.Checks["readiness_probe"] = probeToTopLevelCheck(*container.ReadinessProbe)
-		} else {
-			svc := output.Services[foundSvcIndex]
-			svc.HttpChecks = []appconfig.HttpCheck{probeToHttpCheck(container.ReadinessProbe.HttpGet)}
-			output.Services[foundSvcIndex] = svc
+		if container.LivenessProbe.Exec != nil {
+			slog.Warn("Exec probes are not supported, ignoring it in the livenessProbes")
 		}
+		if container.LivenessProbe.HttpGet != nil {
+			machineChecks["liveness_probe"] = httpProbeToMachineCheck(*container.LivenessProbe.HttpGet)
+		}
+	}
+	if container.ReadinessProbe != nil {
+		if container.ReadinessProbe.Exec != nil {
+			slog.Warn("Exec probes are not supported, ignoring it in the readinessProbe")
+		}
+		if container.ReadinessProbe.HttpGet != nil {
+			hg := container.ReadinessProbe.HttpGet
+			foundSvcIndex := slices.IndexFunc(output.Services, func(service appconfig.Service) bool {
+				return service.InternalPort == hg.Port
+			})
+			if foundSvcIndex == -1 {
+				machineChecks["readiness_probe"] = httpProbeToMachineCheck(*container.ReadinessProbe.HttpGet)
+			} else {
+				svc := output.Services[foundSvcIndex]
+				svc.HttpChecks = []appconfig.HttpCheck{httpProbeToHttpCheck(*container.ReadinessProbe.HttpGet)}
+				output.Services[foundSvcIndex] = svc
+			}
+		}
+	}
+	if len(machineChecks) > 0 {
+		output.Checks = machineChecks
 	}
 	return output, outputSecrets, nil
 }
 
-func probeToTopLevelCheck(probe scoretypes.ContainerProbe) appconfig.TopLevelCheck {
+func httpProbeToMachineCheck(probe scoretypes.HttpProbe) appconfig.TopLevelCheck {
 	check := appconfig.TopLevelCheck{
 		Type:   "http",
-		Port:   probe.HttpGet.Port,
+		Port:   probe.Port,
 		Method: "get",
-		Path:   probe.HttpGet.Path,
+		Path:   probe.Path,
 	}
-	if probe.HttpGet.HttpHeaders != nil {
-		headers := make(map[string]string, len(probe.HttpGet.HttpHeaders))
-		for _, header := range probe.HttpGet.HttpHeaders {
+	if probe.HttpHeaders != nil {
+		headers := make(map[string]string, len(probe.HttpHeaders))
+		for _, header := range probe.HttpHeaders {
 			headers[header.Name] = header.Value
 		}
 		check.Headers = headers
@@ -312,7 +322,7 @@ func probeToTopLevelCheck(probe scoretypes.ContainerProbe) appconfig.TopLevelChe
 	return check
 }
 
-func probeToHttpCheck(probe scoretypes.HttpProbe) appconfig.HttpCheck {
+func httpProbeToHttpCheck(probe scoretypes.HttpProbe) appconfig.HttpCheck {
 	check := appconfig.HttpCheck{
 		Method: "get",
 		Path:   probe.Path,

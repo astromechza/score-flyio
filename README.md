@@ -215,7 +215,7 @@ You will also need to export a Fly API Token and preferred region as environment
 
 ```
 export FLY_REGION_NAME=lhr
-export FLY_API_TOKEN=$(fly tokens create org -x '24h')
+export FLY_API_TOKEN=$(fly tokens create org -x '24h' -o personal)
 ```
 
 Then you can use the `postgres` resource type:
