@@ -83,6 +83,28 @@ func TestInitAndGenerateWithBadScore(t *testing.T) {
 	assert.Equal(t, "", stdout)
 }
 
+func TestInitAndGenerateWithUnknownResource(t *testing.T) {
+	td := changeToTempDir(t)
+	require.NoError(t, os.WriteFile(filepath.Join(td, "score.yaml"), []byte(`apiVersion: score.dev/v1b1
+metadata:
+  name: example
+containers:
+  main:
+    image: nginx
+resources:
+  thing:
+    type: swamp
+`), 0644))
+	stdout, _, err := executeAndResetCommand(context.Background(), rootCmd, []string{"init", "--fly-app-prefix=example"})
+	assert.NoError(t, err)
+	assert.Equal(t, "", stdout)
+	_, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{"generate", "score.yaml"})
+	require.EqualError(t, err, "failed to provision resources: failed to find a provisioner for 'swamp.default#example.thing'")
+	stdout, _, err = executeAndResetCommand(context.Background(), rootCmd, []string{"resources", "list"})
+	assert.NoError(t, err)
+	assert.Equal(t, "uid source_workload provisioner outputs \n", stdout)
+}
+
 func TestSampleTests(t *testing.T) {
 	ioTestsDir, err := filepath.Abs("../../samples")
 	require.NoError(t, err)

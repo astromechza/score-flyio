@@ -132,6 +132,10 @@ ResourceLoop:
 			slog.Info("Provisioned resource", slog.String("uid", string(resUid)))
 			continue ResourceLoop
 		}
+		// Never successfully provisioned so drop it from the state map otherwise we won't be able to de-provision it.
+		if resState.ProvisionerUri == "" {
+			delete(out.Resources, resUid)
+		}
 		return out, fmt.Errorf("failed to find a provisioner for '%s.%s#%s'", resState.Type, resState.Class, resState.Id)
 	}
 
