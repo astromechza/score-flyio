@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -26,11 +27,11 @@ func NewFlyClient() (*FlyClient, error) {
 	token = strings.TrimPrefix(token, "FlyV1 ")
 	c, err := flymachines.NewClientWithResponses("https://api.machines.dev/v1", flymachines.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
 		req.Header.Set("Authorization", "Bearer "+token)
-		log.Printf("Making API request %s %s", req.Method, req.URL)
+		slog.Debug("Making API request %s %s", req.Method, req.URL)
 		return nil
 	}))
 	if err != nil {
-		return nil, fmt.Errorf("failed to setup client: %w", err)
+		return nil, fmt.Errorf("Failed to setup client: %w", err)
 	}
 	return &FlyClient{ClientWithResponsesInterface: c, ApiToken: token}, nil
 }

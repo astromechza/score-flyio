@@ -15,7 +15,7 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/astromechza/score-flyio/internal/command"
@@ -23,7 +23,7 @@ import (
 
 func main() {
 	if err := command.Execute(); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "Error: "+err.Error())
+		slog.Error(err.Error())
 		os.Exit(1)
 	}
 }

@@ -232,6 +232,8 @@ This outputs `host`, `port`, `database`, `username`, and `password` outputs. You
 DB: postgres://${resources.db.username}:${resources.db.password}@${resources.db.host}:${resources.db.port}/${resources.db.database}
 ```
 
+The database starts as a single-node 1cpu cluster but this can be scaled vertically and horizontally using the [guide in the documentation](https://fly.io/docs/postgres/managing/).
+
 Once you have tested this, remember to deprovision the database resource through `score-flyio resources deprovision postgres.default#example.db`.
 
 You can use the following Score file as a test example:
