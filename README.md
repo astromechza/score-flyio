@@ -91,6 +91,19 @@ Sets the Fly Proxy request routing concurrency for load balancing requests betwe
 
 For example, `score-flyio.astromechza.github.com/service-web-concurrency: '{"type": "requests", "hard_limit": 25, "soft_limit": 20}'`.
 
+## State storage
+
+All state including secret values from resource provisioners, are stored in the local `.score-flyio/state.yaml` file. When deploying as part of a CI pipeline, this file is vital to keep safe and control access to. This is similar to a Terraform or OpenTofu state file stored locally. This file should be maintained per deployment environment. Since it may contain unique ids and passwords that cannot be retrieved once lost.
+
+Some recommended methods of storing this file:
+
+- Object Storage
+- local persistent volume
+- password manager such as 1password
+- Hashicorp Vault
+
+In the future we may build state file download, upload, and mediation into `score-flyio`.
+
 ## Resource Provisioning
 
 **NOTE**: this is described in more detail in the Score documentation: <https://docs.score.dev/docs/>.
