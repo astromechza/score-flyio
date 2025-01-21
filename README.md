@@ -57,6 +57,40 @@ See [./samples](./samples) for some sample Score apps that we use during testing
 - Setting the mode for mounted files (not supported by Fly)
 - Setting the subpath or enabling readonly on mounted volumes (not supported by Fly)
 
+## Supported Workload annotations
+
+`score-flyio` supports the following workload annotations that will modify the runtime behavior of the application when the annotations are found in the Workload metadata:
+
+**`score-flyio.astromechza.github.com/service-<portname>-handlers`**
+
+Expects a comma-seperated list of [Fly Proxy connection handlers](https://fly.io/docs/reference/fly-proxy/#connection-handlers) and will add these to the `[[service.ports]]` entry for the port.
+
+For example, `score-flyio.astromechza.github.com/service-web-handlers: tls,http`.
+
+**`score-flyio.astromechza.github.com/service-<portname>-http-options`**
+
+Expects a serialized JSON payload that can contain the `http_service.http_options` attributes as documented in [the docs](https://fly.io/docs/reference/configuration/#http_service-http_options-idle_timeout).
+
+For example, `score-flyio.astromechza.github.com/service-web-http-options: '{"idle_timeout": 60}'`.
+
+**`score-flyio.astromechza.github.com/service-<portname>-auto-stop`**
+
+Enables Fly Proxy based auto-stop to the string set in this attribute. This also enables auto-start.
+
+For example, `score-flyio.astromechza.github.com/service-web-auto-stop: stop`.
+
+**`score-flyio.astromechza.github.com/service-<portname>-min-running`**
+
+Sets the minimum number of machines that must remain running.
+
+For example, `score-flyio.astromechza.github.com/service-web-min-running: "1"`.
+
+**`score-flyio.astromechza.github.com/service-<portname>-concurrency`**
+
+Sets the Fly Proxy request routing concurrency for load balancing requests between machines. This expects a JSON payload.
+
+For example, `score-flyio.astromechza.github.com/service-web-concurrency: '{"type": "requests", "hard_limit": 25, "soft_limit": 20}'`.
+
 ## Resource Provisioning
 
 **NOTE**: this is described in more detail in the Score documentation: <https://docs.score.dev/docs/>.
