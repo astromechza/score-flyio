@@ -88,7 +88,7 @@ For example, `score-flyio.astromechza.github.com/service-web-concurrency: '{"typ
 
 ## State storage
 
-All state including secret values from resource provisioners, are stored in the local `.score-flyio/state.yaml` file. When deploying as part of a CI pipeline, this file is vital to keep safe and control access to. This is similar to a Terraform or OpenTofu state file stored locally. This file should be maintained per deployment environment. Since it may contain unique ids and passwords that cannot be retrieved once lost.
+All state including secret values from resource provisioners, are stored in the local `.score-flyio/state.yaml` file. When deploying as part of a CI pipeline, this file is vital to keep safe and control access to. This is similar to a Terraform or OpenTofu state file stored locally. This file should be maintained per deployment environment. Since it may contain unique ids and random data that cannot be retrieved once lost.
 
 Some recommended methods of storing this file:
 
@@ -96,6 +96,7 @@ Some recommended methods of storing this file:
 - local persistent volume
 - password manager such as 1password
 - Hashicorp Vault
+- Consul
 
 In the future we may build state file download, upload, and mediation into `score-flyio`.
 
