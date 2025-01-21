@@ -16,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/astromechza/score-flyio/internal/flymachines"
 	"github.com/astromechza/score-flyio/internal/provisioners"
 )
 
@@ -33,7 +34,7 @@ var (
 			_, _ = rand.Read(passwordBytes)
 			password = hex.EncodeToString(passwordBytes)
 		}
-		fc, err := NewFlyClient()
+		fc, err := flymachines.NewFlyClient()
 		if err != nil {
 			return nil, fmt.Errorf("failed to setup fly api client: %w", err)
 		}
@@ -67,11 +68,11 @@ var (
 			log.Printf("Resource never provisioned an app")
 			return nil, nil
 		}
-		fc, err := NewFlyClient()
+		fc, err := flymachines.NewFlyClient()
 		if err != nil {
 			return nil, fmt.Errorf("failed to setup fly api client: %w", err)
 		}
-		return nil, DeleteApp(fc, pgApp)
+		return nil, flymachines.DeleteApp(fc, pgApp)
 	})
 
 	builtinPostgresProvision = buildProvisionCommand(func(inputs provisioners.ProvisionerInputs, stderr io.Writer) (*provisioners.ProvisionerOutputs, error) {
@@ -85,7 +86,7 @@ var (
 			_, _ = rand.Read(passwordBytes)
 			password = hex.EncodeToString(passwordBytes)
 		}
-		fc, err := NewFlyClient()
+		fc, err := flymachines.NewFlyClient()
 		if err != nil {
 			return nil, fmt.Errorf("failed to setup fly api client: %w", err)
 		}
@@ -110,16 +111,16 @@ var (
 			passwordBytes := make([]byte, 10)
 			_, _ = rand.Read(passwordBytes)
 			dbPassword = hex.EncodeToString(passwordBytes)
-			if err := ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(`psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "CREATE DATABASE \"%[1]s\""`, dbName)}); err != nil {
+			if err := flymachines.ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(`psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "CREATE DATABASE \"%[1]s\""`, dbName)}); err != nil {
 				return nil, fmt.Errorf("failed to create database: %w", err)
 			}
-			if err := ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(`psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "CREATE USER \"%[1]s\" WITH PASSWORD '%[2]s'"`, dbUser, dbPassword)}); err != nil {
+			if err := flymachines.ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(`psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "CREATE USER \"%[1]s\" WITH PASSWORD '%[2]s'"`, dbUser, dbPassword)}); err != nil {
 				return nil, fmt.Errorf("failed to create user: %w", err)
 			}
-			if err := ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(`psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "GRANT ALL PRIVILEGES ON DATABASE \"%s\" TO \"%s\""`, dbName, dbUser)}); err != nil {
+			if err := flymachines.ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(`psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "GRANT ALL PRIVILEGES ON DATABASE \"%s\" TO \"%s\""`, dbName, dbUser)}); err != nil {
 				return nil, fmt.Errorf("failed to assign role to user: %w", err)
 			}
-			if err := ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(`psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/%s" -c "GRANT ALL ON SCHEMA public TO \"%s\""`, dbName, dbUser)}); err != nil {
+			if err := flymachines.ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(`psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/%s" -c "GRANT ALL ON SCHEMA public TO \"%s\""`, dbName, dbUser)}); err != nil {
 				return nil, fmt.Errorf("failed to grant schema public user: %w", err)
 			}
 			dbNames = append(dbNames, dbName)
@@ -168,7 +169,7 @@ var (
 			log.Printf("Postgres database is already deprovisioned")
 			return nil, nil
 		}
-		fc, err := NewFlyClient()
+		fc, err := flymachines.NewFlyClient()
 		if err != nil {
 			return nil, fmt.Errorf("failed to setup fly api client: %w", err)
 		}
@@ -178,7 +179,7 @@ var (
 		})
 		if len(dbNames) == 0 {
 			log.Printf("Deprovisioning postgres since this was the last database")
-			if err := DeleteApp(fc, pgApp); err != nil {
+			if err := flymachines.DeleteApp(fc, pgApp); err != nil {
 				return nil, err
 			}
 			return &provisioners.ProvisionerOutputs{
@@ -187,7 +188,7 @@ var (
 				},
 			}, nil
 		}
-		if err := ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(
+		if err := flymachines.ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(
 			`set -e; psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "DROP DATABASE IF EXISTS \"%s\" WITH (FORCE)"; psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "DROP USER IF EXISTS \"%s\""`, dbName, dbUser)}); err != nil {
 			return nil, fmt.Errorf("failed to delete database: %w", err)
 		}
@@ -200,8 +201,8 @@ var (
 	})
 )
 
-func ensurePostgresInstance(c *FlyClient, app, password string, stderr io.Writer) error {
-	if flyApp, ok, err := GetApp(c, app); err != nil {
+func ensurePostgresInstance(c *flymachines.FlyClient, app, password string, stderr io.Writer) error {
+	if flyApp, ok, err := flymachines.GetApp(c, app); err != nil {
 		return err
 	} else if ok {
 		log.Printf("Postgres app '%s' already exists in status '%s'", app, *flyApp.Status)
