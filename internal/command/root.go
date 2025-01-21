@@ -15,10 +15,11 @@
 package command
 
 import (
-	"log/slog"
+	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/astromechza/score-flyio/internal/logging"
 	"github.com/astromechza/score-flyio/internal/provisioners/builtin"
 )
 
@@ -32,13 +33,9 @@ var (
 			HiddenDefaultCmd: true,
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if v, _ := cmd.Flags().GetCount("verbose"); v == 0 {
-				slog.SetDefault(slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelInfo})))
-			} else if v == 1 {
-				slog.SetDefault(slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelDebug})))
-			} else if v == 2 {
-				slog.SetDefault(slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelDebug, AddSource: true})))
-			}
+			d, _ := cmd.Flags().GetBool("debug")
+			d = d || os.Getenv("SCORE_FLYIO_DEBUG") == "true"
+			logging.Set(d, cmd.ErrOrStderr())
 			return nil
 		},
 	}
@@ -46,7 +43,7 @@ var (
 
 func init() {
 	rootCmd.Version = Version
-	rootCmd.PersistentFlags().CountP("verbose", "v", "Increase log verbosity and detail by specifying this flag one or more times")
+	rootCmd.PersistentFlags().BoolP("debug", "d", false, "Increase log verbosity to debug level")
 	builtin.Install(rootCmd)
 }
 
