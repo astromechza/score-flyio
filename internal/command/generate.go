@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -31,6 +32,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/astromechza/score-flyio/internal/convert"
+	"github.com/astromechza/score-flyio/internal/flymachines"
 	"github.com/astromechza/score-flyio/internal/provisioners"
 	"github.com/astromechza/score-flyio/internal/state"
 )
@@ -40,6 +42,8 @@ const (
 	generateCmdOverridePropertyFlag = "override-property"
 	generateCmdImageFlag            = "image"
 	generateCmdEnvSecretsFlag       = "secrets-file"
+	generateCmdDeployFlag           = "deploy"
+	generateCmdDeployArgsFlag       = "deploy-args"
 )
 
 var generateCmd = &cobra.Command{
@@ -137,11 +141,13 @@ var generateCmd = &cobra.Command{
 			return fmt.Errorf("failed to provision resources: %w", err)
 		}
 
+		flyAppName := currentState.Extras.AppPrefix + workloadName
+		flyAppToml := fmt.Sprintf("fly_%s.toml", workloadName)
+
 		if manifest, secrets, err := convert.Workload(currentState, workloadName); err != nil {
 			return fmt.Errorf("failed to convert workloads: %w", err)
 		} else {
 
-			dest := fmt.Sprintf("fly_%s.toml", workloadName)
 			f, err := os.CreateTemp("", "*")
 			if err != nil {
 				return fmt.Errorf("%s: failed to create tempfile: %w", workloadName, err)
@@ -149,24 +155,64 @@ var generateCmd = &cobra.Command{
 				return fmt.Errorf("%s: failed to encode toml: %w", workloadName, err)
 			} else if err := f.Close(); err != nil {
 				return fmt.Errorf("%s: failed to close tempfile: %w", workloadName, err)
-			} else if err := os.Rename(f.Name(), dest); err != nil {
+			} else if err := os.Rename(f.Name(), flyAppToml); err != nil {
 				return fmt.Errorf("%s: failed to rename tempfile: %w", workloadName, err)
 			}
-			slog.Info(fmt.Sprintf("Wrote manifest to %s for workload '%s'", dest, workloadName))
+			slog.Info(fmt.Sprintf("Wrote manifest to %s for workload '%s'", flyAppToml, workloadName))
 
-			if x, _ := cmd.Flags().GetString(generateCmdEnvSecretsFlag); x == "" {
-				if len(secrets) > 0 {
-					return fmt.Errorf(
-						"this workload uses application secrets at runtime, you must write these secrets to an output or stdout file using --secrets-file and then install them for app '%s'",
-						currentState.Extras.AppPrefix+workloadName,
-					)
+			if x, _ := cmd.Flags().GetString(generateCmdEnvSecretsFlag); x != "" {
+				if err := writeSecretsFile(secrets, x); err != nil {
+					return fmt.Errorf("failed to write secrets env file: %w", err)
+				} else {
+					slog.Info(fmt.Sprintf("Wrote runtime secrets for workload '%s' to %s", workloadName, x))
 				}
-			} else if err := writeSecretsFile(secrets, x); err != nil {
-				return fmt.Errorf("failed to write secrets env file: %w", err)
-			} else {
-				slog.Info(fmt.Sprintf("Wrote runtime secrets for workload '%s' to %s", workloadName, x))
+			}
+
+			mustDeploy, _ := cmd.Flags().GetBool(generateCmdDeployFlag)
+			if mustDeploy {
+				slog.Info("Attempting to deploy the app")
+				client, err := flymachines.NewFlyClient()
+				if err != nil {
+					return fmt.Errorf("failed to setup deploy client: %w", err)
+				} else if _, ok, err := flymachines.GetApp(client, flyAppName); err != nil {
+					return fmt.Errorf("failed to get app: %w", err)
+				} else if !ok {
+					slog.Info("Creating app", slog.String("app", flyAppName))
+					c := exec.Command("fly", "apps", "create", "--access-token", client.ApiToken, flyAppName)
+					c.Stderr = cmd.ErrOrStderr()
+					c.Stdout = cmd.OutOrStdout()
+					if err := c.Run(); err != nil {
+						return fmt.Errorf("failed to create app: %w", err)
+					}
+				}
+				if len(secrets) > 0 {
+					slog.Info("Setting secrets on app", slog.String("app", flyAppName), slog.Int("#secrets", len(secrets)))
+					args := []string{"secrets", "set", "--access-token", client.ApiToken, "--app", flyAppName, "--stage"}
+					for s, s2 := range secrets {
+						args = append(args, fmt.Sprintf("%s=%s", s, s2))
+					}
+					c := exec.Command("fly", args...)
+					c.Stderr = cmd.ErrOrStderr()
+					c.Stdout = cmd.OutOrStdout()
+					if err := c.Run(); err != nil {
+						return fmt.Errorf("failed to set secrets on app: %w", err)
+					}
+				}
+				slog.Info("Deploying to app", slog.String("app", flyAppName))
+				args = []string{"deploy", "--access-token", client.ApiToken, "--app", flyAppName, "--config", flyAppToml}
+				if deployArgs, _ := cmd.Flags().GetStringArray(generateCmdDeployArgsFlag); len(deployArgs) > 0 {
+					args = append(args, deployArgs...)
+				}
+				c := exec.Command("fly", args...)
+				c.Stderr = cmd.ErrOrStderr()
+				c.Stdout = cmd.OutOrStdout()
+				c.Stdin = cmd.InOrStdin()
+				if err := c.Run(); err != nil {
+					return fmt.Errorf("failed to deploy: %w", err)
+				}
 			}
 		}
+
 		return nil
 	},
 }
@@ -242,5 +288,7 @@ func init() {
 	generateCmd.Flags().StringArray(generateCmdOverridePropertyFlag, []string{}, "An optional set of path=key overrides to set or remove")
 	generateCmd.Flags().String(generateCmdImageFlag, "", "An optional container image to use for any container with image == '.'")
 	generateCmd.Flags().String(generateCmdEnvSecretsFlag, "", "An optional output file for the runtime secrets in KEY=VALUE format")
+	generateCmd.Flags().Bool(generateCmdDeployFlag, false, "Deploy the Fly app and secrets after generating the manifests")
+	generateCmd.Flags().StringArray(generateCmdDeployArgsFlag, []string{}, "Provide space-separated CLI arguments for customizing --deploy")
 	rootCmd.AddCommand(generateCmd)
 }

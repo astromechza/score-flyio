@@ -14,25 +14,20 @@ Initialize the project directory. Because app names must be globally unique in F
 
 ```
 score-flyio init --fly-app-prefix my-app-prefix-
-fly apps create my-app-prefix-example-workload
 ```
 
-Then generate the output Fly toml files per Score workload (here we're also piping the runtime secrets to import them into the Fly app):
+Then generate the output Fly toml files per Score workload, set the secrets on the app, and deploy the app all in one command:
 
 ```
-score-flyio generate score.yaml --secrets-file=- | fly secrets import -a my-app-prefix-example-workload --stage
+export FLY_API_TOKEN=$(fly tokens create org -x '24h' -o personal)
+export FLY_REGION_NAME=lhr
+score-flyio generate score.yaml --deploy
 ```
 
-Then assign a shared ip if needed for each app that needs ingress networking:
+Then assign a shared ip if needed for the app that needs ingress networking:
 
 ```
 fly ip allocate-v4 -a my-app-prefix-example-workload --shared
-```
-
-Now we can deploy our workload:
-
-```
-fly deploy -c fly_example-workload.toml
 ```
 
 See [./samples](./samples) for some sample Score apps that we use during testing to check the conversion process. These should all be deployable.
