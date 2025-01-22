@@ -137,7 +137,7 @@ func Workload(currentState *state.State, workloadName string) (*appconfig.AppCon
 				return nil, nil, fmt.Errorf("container[%s].variables: %s: %w", containerName, key, err)
 			}
 			if *sa {
-				slog.Warn("Secret accessed as part of resolving container variables, converting it into a runtime secret")
+				slog.Warn("Secret accessed as part of resolving container variables, converting variable into a runtime secret", slog.String("key", key))
 				outputSecrets[key] = out
 			} else {
 				output.Env[key] = out
@@ -184,7 +184,7 @@ func Workload(currentState *state.State, workloadName string) (*appconfig.AppCon
 			}
 			if f.Content != nil {
 				if *sa {
-					slog.Warn("Secret accessed as part of resolving container files, marking output as a runtime secret")
+					slog.Warn("Secret accessed as part of resolving container files, marking output as a runtime secret", slog.String("file", f.Target))
 					h := sha256.New()
 					h.Write([]byte(workloadName))
 					h.Write([]byte(containerName))

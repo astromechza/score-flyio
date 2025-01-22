@@ -158,17 +158,20 @@ var generateCmd = &cobra.Command{
 			} else if err := os.Rename(f.Name(), flyAppToml); err != nil {
 				return fmt.Errorf("%s: failed to rename tempfile: %w", workloadName, err)
 			}
-			slog.Info(fmt.Sprintf("Wrote manifest to %s for workload '%s'", flyAppToml, workloadName))
+			slog.Info("Wrote app manifest to file", slog.String("app", flyAppName), slog.String("file", flyAppToml))
+
+			mustDeploy, _ := cmd.Flags().GetBool(generateCmdDeployFlag)
 
 			if x, _ := cmd.Flags().GetString(generateCmdEnvSecretsFlag); x != "" {
 				if err := writeSecretsFile(secrets, x); err != nil {
 					return fmt.Errorf("failed to write secrets env file: %w", err)
 				} else {
-					slog.Info(fmt.Sprintf("Wrote runtime secrets for workload '%s' to %s", workloadName, x))
+					slog.Info("Wrote app secrets to file", slog.String("app", flyAppName), slog.String("file", flyAppToml), slog.Int("#secrets", len(secrets)))
 				}
+			} else if len(secrets) > 0 && !mustDeploy {
+				slog.Warn("App contains secrets which must be imported before deployment. Either specify --deploy to have score-flyio do this for you, or use --secrets-file to output the secrets", slog.String("app", flyAppName), slog.Int("#secrets", len(secrets)))
 			}
 
-			mustDeploy, _ := cmd.Flags().GetBool(generateCmdDeployFlag)
 			if mustDeploy {
 				slog.Info("Attempting to deploy the app")
 				client, err := flymachines.NewFlyClient()

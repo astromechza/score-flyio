@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 
 	"github.com/spf13/cobra"
 
@@ -31,6 +32,7 @@ func buildProvisionCommand(inner func(inputs provisioners.ProvisionerInputs, std
 			if err != nil {
 				return err
 			}
+			slog.SetDefault(slog.Default().WithGroup(inputs.ResourceId))
 			cmd.SilenceUsage = true
 			out, err := inner(inputs, cmd.ErrOrStderr())
 			if out != nil {
@@ -51,6 +53,7 @@ func buildDeProvisionCommand(inner func(inputs provisioners.ProvisionerInputs, s
 			if err != nil {
 				return err
 			}
+			slog.SetDefault(slog.Default().WithGroup(inputs.ResourceId))
 			cmd.SilenceUsage = true
 			out, err := inner(inputs, cmd.ErrOrStderr())
 			if out != nil {

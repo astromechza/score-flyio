@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	rand2 "math/rand"
 	"os"
 	"os/exec"
@@ -65,7 +65,6 @@ var (
 	builtinPostgresInstanceDeProvision = buildDeProvisionCommand(func(inputs provisioners.ProvisionerInputs, stderr io.Writer) (*provisioners.ProvisionerOutputs, error) {
 		pgApp, ok := inputs.ResourceState["app"].(string)
 		if !ok {
-			log.Printf("Resource never provisioned an app")
 			return nil, nil
 		}
 		fc, err := flymachines.NewFlyClient()
@@ -151,13 +150,11 @@ var (
 	builtinPostgresDeProvision = buildDeProvisionCommand(func(inputs provisioners.ProvisionerInputs, stderr io.Writer) (*provisioners.ProvisionerOutputs, error) {
 		dbName, ok := inputs.ResourceState["database"].(string)
 		if !ok {
-			log.Printf("Postgres database was never assigned")
 			return nil, nil
 		}
 		dbUser, _ := inputs.ResourceState["username"].(string)
 		sharedState, ok := inputs.SharedState[SharedStateKey].(map[string]interface{})
 		if !ok {
-			log.Printf("Postgres instance no longer exists")
 			return nil, nil
 		}
 		pgApp, _ := sharedState["app"].(string)
@@ -166,7 +163,7 @@ var (
 			x, _ := i.(string)
 			return x == dbName
 		}) {
-			log.Printf("Postgres database is already deprovisioned")
+			slog.Info("Postgres database is already de-provisioned", slog.String("database", dbName))
 			return nil, nil
 		}
 		fc, err := flymachines.NewFlyClient()
@@ -178,7 +175,7 @@ var (
 			return x == dbName
 		})
 		if len(dbNames) == 0 {
-			log.Printf("Deprovisioning postgres since this was the last database")
+			slog.Info("Deprovisioning postgres app since this was the last database", slog.String("database", dbName), slog.String("app", pgApp))
 			if err := flymachines.DeleteApp(fc, pgApp); err != nil {
 				return nil, err
 			}
@@ -188,6 +185,7 @@ var (
 				},
 			}, nil
 		}
+		slog.Info("Dropping postgres database from instance", slog.String("database", dbName), slog.String("app", pgApp))
 		if err := flymachines.ExecAnyStartedMachine(fc, pgApp, []string{"/bin/bash", "-c", fmt.Sprintf(
 			`set -e; psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "DROP DATABASE IF EXISTS \"%s\" WITH (FORCE)"; psql "postgresql://postgres:${OPERATOR_PASSWORD}@localhost:5432/postgres" -c "DROP USER IF EXISTS \"%s\""`, dbName, dbUser)}); err != nil {
 			return nil, fmt.Errorf("failed to delete database: %w", err)
@@ -205,13 +203,13 @@ func ensurePostgresInstance(c *flymachines.FlyClient, app, password string, stde
 	if flyApp, ok, err := flymachines.GetApp(c, app); err != nil {
 		return err
 	} else if ok {
-		log.Printf("Postgres app '%s' already exists in status '%s'", app, *flyApp.Status)
+		slog.Info("Postgres app already exists", slog.String("app", app), slog.String("status", *flyApp.Status))
 	} else {
 		region, err := flyRegion()
 		if err != nil {
 			return err
 		}
-		log.Printf("Provisioning new postgres app")
+		slog.Info("Provisioning new postgres app", slog.String("app", app), slog.String("region", region))
 		c := exec.Command(
 			"fly", "postgres", "create", "--access-token", c.ApiToken,
 			"--name", app, "--region", region, "--password", password, "--autostart",
