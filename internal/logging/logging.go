@@ -3,6 +3,7 @@ package logging
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -39,17 +40,22 @@ func (s *slogWriter) Handle(ctx context.Context, record slog.Record) error {
 	sb.WriteString(record.Level.String())
 	sb.WriteByte(' ')
 	if len(s.Groups) > 0 {
+		sb.WriteByte('[')
 		sb.WriteString(strings.Join(s.Groups, ","))
-		sb.WriteByte(' ')
+		sb.WriteString("] ")
 	}
-	sb.WriteString(record.Message)
+	sb.WriteString(strings.TrimSuffix(record.Message, "\n"))
 	for _, attr := range s.Attrs {
 		sb.WriteByte(' ')
-		sb.WriteString(attr.String())
+		sb.WriteString(attr.Key)
+		sb.WriteByte('=')
+		_, _ = fmt.Fprintf(sb, "%q", attr.Value.String())
 	}
 	record.Attrs(func(attr slog.Attr) bool {
 		sb.WriteByte(' ')
-		sb.WriteString(attr.String())
+		sb.WriteString(attr.Key)
+		sb.WriteByte('=')
+		_, _ = fmt.Fprintf(sb, "%q", attr.Value.String())
 		return true
 	})
 	sb.WriteByte('\n')
