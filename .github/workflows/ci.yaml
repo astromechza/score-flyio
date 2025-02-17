@@ -20,3 +20,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+      - name: tidy
+        run: go mod tidy
+      - name: diff
+        run: git diff --exit-code

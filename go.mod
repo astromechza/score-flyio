@@ -3,8 +3,8 @@ module github.com/astromechza/score-flyio
 go 1.24.0
 
 require (
+	dario.cat/mergo v1.0.1
 	github.com/BurntSushi/toml v1.4.0
-	github.com/imdario/mergo v1.0.1
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/score-spec/score-go v1.9.1
 	github.com/spf13/cobra v1.9.1
@@ -14,7 +14,6 @@ require (
 )
 
 require (
-	dario.cat/mergo v1.0.1 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/google/uuid v1.5.0 // indirect
@@ -26,5 +25,3 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
-
-replace github.com/imdario/mergo => dario.cat/mergo v1.0.0
