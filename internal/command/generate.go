@@ -22,8 +22,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"dario.cat/mergo"
 	"github.com/BurntSushi/toml"
-	"github.com/imdario/mergo"
 	"github.com/score-spec/score-go/framework"
 	scoreloader "github.com/score-spec/score-go/loader"
 	scoreschema "github.com/score-spec/score-go/schema"
