@@ -25,8 +25,6 @@ jobs:
           go-version-file: 'go.mod'
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
-      - name: Check git diff
-        run: git diff --exit-code
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -35,3 +33,5 @@ jobs:
           args: ${{ startsWith(github.ref, 'refs/tags/') && 'release --clean' || 'release --clean --skip=sign,announce,validate,publish' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check git diff
+        run: git diff --exit-code
