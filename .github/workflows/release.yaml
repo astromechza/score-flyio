@@ -25,6 +25,8 @@ jobs:
           go-version-file: 'go.mod'
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
+      - name: Check git diff
+        run: git diff --exit-code
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
