@@ -4,3 +4,4 @@
 manifests.yaml
 /*.toml
 /*.env
+/dist/
