@@ -4,8 +4,6 @@ builds:
   - id: score-flyio
     binary: score-flyio
     main: ./
-    ldflags:
-      - -X github.com/astromechza/score-flyio/internal/command.Version={{ .Version }}
     env:
       - CGO_ENABLED=0
     targets:

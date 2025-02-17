@@ -16,6 +16,7 @@ package command
 
 import (
 	"os"
+	"runtime/debug"
 
 	"github.com/spf13/cobra"
 
@@ -24,8 +25,6 @@ import (
 )
 
 var (
-	Version = "0.0.0"
-
 	rootCmd = &cobra.Command{
 		Use:           "score-flyio",
 		SilenceErrors: true,
@@ -42,7 +41,9 @@ var (
 )
 
 func init() {
-	rootCmd.Version = Version
+	if info, ok := debug.ReadBuildInfo(); ok {
+		rootCmd.Version = info.Main.Version
+	}
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "Increase log verbosity to debug level")
 	builtin.Install(rootCmd)
 }
