@@ -1,12 +1,11 @@
 module github.com/astromechza/score-flyio
 
 go 1.24.0
-
 require (
 	dario.cat/mergo v1.0.1
 	github.com/BurntSushi/toml v1.4.0
 	github.com/oapi-codegen/runtime v1.1.1
-	github.com/score-spec/score-go v1.9.3
+	github.com/score-spec/score-go v1.9.5
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
