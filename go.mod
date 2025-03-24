@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	dario.cat/mergo v1.0.1
-	github.com/BurntSushi/toml v1.4.0
+	github.com/BurntSushi/toml v1.5.0
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/score-spec/score-go v1.9.3
 	github.com/spf13/cobra v1.9.1
