@@ -17,7 +17,7 @@ jobs:
       - name: test
         run: go run gotest.tools/gotestsum@latest --format github-actions
       - name: lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v8
         with:
           version: latest
       - name: tidy
