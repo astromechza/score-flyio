@@ -3,7 +3,7 @@ module github.com/astromechza/score-flyio
 go 1.24.0
 
 require (
-	dario.cat/mergo v1.0.1
+	dario.cat/mergo v1.0.2
 	github.com/BurntSushi/toml v1.4.0
 	github.com/oapi-codegen/runtime v1.1.1
 	github.com/score-spec/score-go v1.9.3
